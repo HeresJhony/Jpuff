@@ -210,7 +210,7 @@ export async function renderCart() {
         cartItem.className = 'cart-card';
 
         cartItem.innerHTML = `
-    < img src = "${item.image_url || 'img/vape_icon.png'}" class="cart-item-img" style = "width: 60px; height: 60px; object-fit: cover; border-radius: 8px; border: 1px solid var(--neon-blue);" >
+    <img src="${item.image_url || 'img/vape_icon.png'}" class="cart-item-img" style="width: 60px; height: 60px; object-fit: cover; border-radius: 8px; border: 1px solid var(--neon-blue);">
             
             <div class="cart-item-info" style="flex: 1; margin-left: 15px;">
                 <h4 style="margin: 0 0 5px 0;">${item.name}</h4>
@@ -671,7 +671,7 @@ async function initProductDetails() {
         };
 
         container.innerHTML = `
-    < img src = "${p.image_url || 'img/vape_icon.png'}" class="detail-image" >
+            <img src="${p.image_url || 'img/vape_icon.png'}" class="product-detail-image" style="display:block; margin: 0 auto;">
         <div class="detail-panel">
             <h2>${p.brand} - ${p.model_name}</h2>
             <div class="detail-row">
