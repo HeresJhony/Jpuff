@@ -561,368 +561,305 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
         });
-    }
 
-    if (window.location.pathname.includes('product_details.html')) {
-        initProductDetails(); // Define this locally or import
+        if (window.location.pathname.includes('cart.html') || window.location.pathname.includes('checkout.html')) {
+            async function initializeDiscountAvailability() {
+                const userId = getUserId();
+                if (!userId) return;
+
+                // Load Promo Info if exists
+                const localPromo = getActivePromoCode();
+                if (localPromo) {
+                    console.log("Loading info for promo:", localPromo);
+                    const info = await fetchDiscountInfo(localPromo);
+                    if (info && info.found && info.active) {
+                        loadedPromoInfo = info;
+                        console.log("Promo info loaded:", info);
+                    }
+                }
+
+                // Check eligibility (bypass cache for accuracy)
+                const isNewUser = await checkUserEligibility(userId, true);
+
+                // If we add more discounts later, add checking logic here
+                const hasAnyDiscount = isNewUser || (loadedPromoInfo !== null);
+
+                const yesRadio = document.querySelector('input[name="use_discount"][value="yes"]');
+                const noRadio = document.querySelector('input[name="use_discount"][value="no"]');
+
+                if (!hasAnyDiscount && yesRadio) {
+                    yesRadio.disabled = true;
+                    // Make it look disabled
+                    const label = yesRadio.parentElement;
+                    if (label) {
+                        label.style.opacity = '0.5';
+                        label.style.cursor = 'not-allowed';
+                        label.title = 'Нет доступных скидок';
+                    }
+
+                    // Ensure "No" is checked
+                    if (yesRadio.checked) {
+                        yesRadio.checked = false;
+                        if (noRadio) {
+                            noRadio.checked = true;
+                            toggleDiscountInput();
+                        }
+                    }
+                } else if (yesRadio) {
+                    // Enable if available
+                    yesRadio.disabled = false;
+                    const label = yesRadio.parentElement;
+                    if (label) {
+                        label.style.opacity = '1';
+                        label.style.cursor = 'pointer';
+                        label.title = '';
+                    }
+                }
+            }
+
+            function initCheckoutPage() {
+                const totalEl = document.getElementById('checkout-sum');
+                if (!totalEl) return;
+
+                const cart = getCart();
+                if (cart.length === 0) {
+                    window.location.href = 'index.html'; // Redirect if empty
+                    return;
+                }
+
+                const originalCartTotal = Math.round(cart.reduce((sum, item) => sum + (item.price * item.quantity), 0));
+
+                // Always show original total (discount applied internally only)
+                totalEl.textContent = `${originalCartTotal} ₽`;
+
+                // Load available bonuses and discounts immediately when page loads
+                const userId = getUserId();
+                if (userId) {
+                    loadAvailableBonuses();
+                    loadAvailableDiscounts();
+                    initializeDiscountAvailability(); // Block "Yes" if no discount
+                }
+            }
+
+            function toggleBonusInput() {
+                const useBonuses = document.querySelector('input[name="use_bonuses"]:checked')?.value;
+                const bonusBlock = document.getElementById('bonus-input-block');
+
+                if (useBonuses === 'yes' && bonusBlock) {
+                    bonusBlock.style.display = 'block';
+                    loadAvailableBonuses();
+                } else if (bonusBlock) {
+                    bonusBlock.style.display = 'none';
+                    const bonusInput = document.getElementById('bonus-amount');
+                    if (bonusInput) bonusInput.value = 0;
+                    updateOverallTotal();
+                }
+            }
+
+            /**
+             * Toggle Discount Input Section
+             */
+            function toggleDiscountInput() {
+                const useDiscount = document.querySelector('input[name="use_discount"]:checked')?.value;
+                const discountBlock = document.getElementById('discount-input-block');
+                const discountMsg = document.getElementById('discount-applied-msg');
+
+                if (useDiscount === 'yes' && discountBlock) {
+                    discountBlock.style.display = 'block';
+                    loadAvailableDiscounts();
+                } else if (discountBlock) {
+                    discountBlock.style.display = 'none';
+                    if (discountMsg) discountMsg.style.display = 'none';
+
+                    // Reset select to 'none'
+                    const select = document.getElementById('discount-select');
+                    if (select) select.value = 'none';
+
+                    updateOverallTotal();
+                }
+            }
+
+            async function loadAvailableDiscounts() {
+                const userId = getUserId();
+                if (!userId) return;
+
+                const select = document.getElementById('discount-select');
+                if (!select) return;
+
+                // Preserve existing options if we want (e.g. 'None')
+                // But usually we can rebuild.
+                select.innerHTML = '<option value="none">Проверка...</option>';
+
+                // Force fresh check to ensure consistency with profile status
+                const isNewUser = await checkUserEligibility(userId, true);
+
+                select.innerHTML = '<option value="none">-- Выберите скидку --</option>';
+
+                if (isNewUser) {
+                    const opt = document.createElement('option');
+                    opt.value = 'new_client_10';
+                    opt.textContent = '🔥 Скидка Нового Клиента (-10%)';
+                    select.appendChild(opt);
+                }
+                // 2. Dynamic Promo (from DB)
+                if (loadedPromoInfo) {
+                    const option = document.createElement('option');
+                    option.value = loadedPromoInfo.code;
+                    // e.g. "🎒 Скидка Путник (10%)" or "❄️ АКЦИЯ (15%)"
+                    const labelSafe = loadedPromoInfo.label || loadedPromoInfo.code;
+                    let valSuffix = "";
+                    if (loadedPromoInfo.type === 'percent') valSuffix = `- ${loadedPromoInfo.value}% `;
+                    else valSuffix = `- ${loadedPromoInfo.value}₽`;
+
+                    option.textContent = `${labelSafe} (${valSuffix})`;
+                    select.appendChild(option);
+                }
+
+                if (select.options.length === 1) { // Only "Choose discount" option
+                    const opt = document.createElement('option');
+                    opt.value = 'none';
+                    opt.disabled = true;
+                    opt.textContent = 'Нет активных скидок';
+                    select.appendChild(opt);
+                }
+            }
+
+            /**
+             * Load and display available bonuses
+             */
+            async function loadAvailableBonuses() {
+                // getUserId already imported
+                const userId = getUserId();
+                const availableEl = document.getElementById('available-bonuses');
+                const bonusInput = document.getElementById('bonus-amount');
+
+                const { getUserBonuses, syncBonuses } = await import('./services/bonus-system.js');
+                await syncBonuses(userId);
+                const availableBonuses = getUserBonuses(userId);
+
+                if (availableEl) availableEl.textContent = availableBonuses;
+                if (bonusInput) bonusInput.max = availableBonuses;
+
+                // Disable "Yes" option if 0 bonuses
+                const yesRadio = document.querySelector('input[name="use_bonuses"][value="yes"]');
+                const noRadio = document.querySelector('input[name="use_bonuses"][value="no"]');
+
+                if (yesRadio && availableBonuses === 0) {
+                    yesRadio.disabled = true;
+                    // Also style the parent label to look disabled if needed
+                    yesRadio.parentElement.style.opacity = "0.5";
+                    yesRadio.parentElement.style.cursor = "not-allowed";
+
+                    // If it was checked, uncheck it and check 'no'
+                    if (yesRadio.checked) {
+                        yesRadio.checked = false;
+                        if (noRadio) {
+                            noRadio.checked = true;
+                            // Trigger change event to hide the input
+                            toggleBonusInput();
+                        }
+                    }
+                } else if (yesRadio) {
+                    yesRadio.disabled = false;
+                    yesRadio.parentElement.style.opacity = "1";
+                    yesRadio.parentElement.style.cursor = "pointer";
+                }
+            }
+
+            /**
+             * MAIN TOTAL CALCULATOR (Handles Discounts + Bonuses)
+             */
+            function updateOverallTotal() {
+                const cart = getCart();
+                const originalTotal = Math.round(cart.reduce((sum, item) => sum + (item.price * item.quantity), 0));
+
+                let currentTotal = originalTotal;
+
+                // 1. Apply Discount
+                const select = document.getElementById('discount-select');
+                let discountAmount = 0;
+
+                if (select && select.offsetParent !== null) { // if visible
+                    if (select.value === 'new_client_10') {
+                        discountAmount = Math.round(originalTotal * 0.10);
+                        currentTotal -= discountAmount;
+
+                        const msg = document.getElementById('discount-applied-msg');
+                        if (msg) {
+                            msg.style.display = 'block';
+                            msg.textContent = `Применена скидка 10 % (-${discountAmount} ₽)`;
+                        }
+                    }
+                    // Dynamic Promo Calculation
+                    else if (loadedPromoInfo && select.value === loadedPromoInfo.code) {
+                        if (loadedPromoInfo.type === 'percent') {
+                            discountAmount = Math.round(originalTotal * (loadedPromoInfo.value / 100));
+                        } else {
+                            discountAmount = Number(loadedPromoInfo.value);
+                        }
+                        currentTotal -= discountAmount;
+
+                        const msg = document.getElementById('discount-applied-msg');
+                        if (msg) {
+                            msg.style.display = 'block';
+                            const label = loadedPromoInfo.label || "Скидка";
+                            msg.textContent = `Применена "${label}"(-${discountAmount} ₽)`;
+                        }
+                    }
+                    else {
+                        // Fallback or Unknown
+                        const msg = document.getElementById('discount-applied-msg');
+                        if (msg) msg.style.display = 'none';
+                    }
+                }
+
+                // 2. Apply Bonuses
+                const bonusInput = document.getElementById('bonus-amount');
+                const bonusDiscountInfo = document.getElementById('bonus-discount-info');
+                const bonusDiscountAmount = document.getElementById('bonus-discount-amount');
+
+                let bonusesToUse = 0;
+                if (bonusInput && bonusInput.offsetParent !== null) { // if visible
+                    bonusesToUse = parseInt(bonusInput.value) || 0;
+                    const maxBonuses = parseInt(bonusInput.max) || 0;
+
+                    // Limit
+                    if (bonusesToUse > maxBonuses) {
+                        bonusesToUse = maxBonuses;
+                        bonusInput.value = maxBonuses;
+                    }
+
+                    // Cannot use more bonuses than price
+                    if (bonusesToUse > currentTotal) {
+                        bonusesToUse = currentTotal;
+                        // We don't change input value here to not annoy user, but we limit math
+                    }
+                }
+
+                const finalTotal = Math.max(0, currentTotal - bonusesToUse);
+
+                // Update UI
+                const checkoutSum = document.getElementById('checkout-sum');
+                if (checkoutSum) {
+                    if (discountAmount > 0 || bonusesToUse > 0) {
+                        checkoutSum.innerHTML = `${finalTotal} ₽ <span style="font-size: 0.7em; color: #aaa; text-decoration: line-through;">${originalTotal} ₽</span>`;
+                        checkoutSum.style.color = "#00ff88"; // Green for discounted
+                    } else {
+                        checkoutSum.textContent = `${finalTotal} ₽`;
+                        checkoutSum.style.color = "white";
+                    }
+                }
+
+                // Update Bonus UI info
+                if (bonusDiscountInfo && bonusDiscountAmount) {
+                    if (bonusesToUse > 0) {
+                        bonusDiscountInfo.style.display = 'block';
+                        bonusDiscountAmount.textContent = bonusesToUse;
+                    } else {
+                        bonusDiscountInfo.style.display = 'none';
+                    }
+                }
+            }
+
     }
 });
-
-
-/**
- * Checks if any discounts are available on load and disables "Yes" radio if none.
- */
-async function initializeDiscountAvailability() {
-    const userId = getUserId();
-    if (!userId) return;
-
-    // Load Promo Info if exists
-    const localPromo = getActivePromoCode();
-    if (localPromo) {
-        console.log("Loading info for promo:", localPromo);
-        const info = await fetchDiscountInfo(localPromo);
-        if (info && info.found && info.active) {
-            loadedPromoInfo = info;
-            console.log("Promo info loaded:", info);
-        }
-    }
-
-    // Check eligibility (bypass cache for accuracy)
-    const isNewUser = await checkUserEligibility(userId, true);
-
-    // If we add more discounts later, add checking logic here
-    const hasAnyDiscount = isNewUser || (loadedPromoInfo !== null);
-
-    const yesRadio = document.querySelector('input[name="use_discount"][value="yes"]');
-    const noRadio = document.querySelector('input[name="use_discount"][value="no"]');
-
-    if (!hasAnyDiscount && yesRadio) {
-        yesRadio.disabled = true;
-        // Make it look disabled
-        const label = yesRadio.parentElement;
-        if (label) {
-            label.style.opacity = '0.5';
-            label.style.cursor = 'not-allowed';
-            label.title = 'Нет доступных скидок';
-        }
-
-        // Ensure "No" is checked
-        if (yesRadio.checked) {
-            yesRadio.checked = false;
-            if (noRadio) {
-                noRadio.checked = true;
-                toggleDiscountInput();
-            }
-        }
-    } else if (yesRadio) {
-        // Enable if available
-        yesRadio.disabled = false;
-        const label = yesRadio.parentElement;
-        if (label) {
-            label.style.opacity = '1';
-            label.style.cursor = 'pointer';
-            label.title = '';
-        }
-    }
-}
-
-function initCheckoutPage() {
-    const totalEl = document.getElementById('checkout-sum');
-    if (!totalEl) return;
-
-    const cart = getCart();
-    if (cart.length === 0) {
-        window.location.href = 'index.html'; // Redirect if empty
-        return;
-    }
-
-    const originalCartTotal = Math.round(cart.reduce((sum, item) => sum + (item.price * item.quantity), 0));
-
-    // Always show original total (discount applied internally only)
-    totalEl.textContent = `${originalCartTotal} ₽`;
-
-    // Load available bonuses and discounts immediately when page loads
-    const userId = getUserId();
-    if (userId) {
-        loadAvailableBonuses();
-        loadAvailableDiscounts();
-        initializeDiscountAvailability(); // Block "Yes" if no discount
-    }
-}
-
-// Logic for Product Details Page
-async function initProductDetails() {
-    // ... existing code ...
-    const params = new URLSearchParams(window.location.search);
-    const productId = params.get('id');
-    if (!productId) return;
-
-    const container = document.getElementById('product-details-container');
-    container.innerHTML = '<p style="text-align:center;">Загрузка...</p>';
-
-    const product = await fetchProductById(productId);
-
-    if (product) {
-        const p = {
-            ...product,
-            price: Number(product.price),
-            stock: Number(product.stock),
-            product_id: Number(product.product_id)
-        };
-
-        container.innerHTML = `
-            <img src="${p.image_url || 'img/vape_icon.png'}" class="product-detail-image" style="display:block; margin: 0 auto;">
-        <div class="detail-panel">
-            <h2>${p.brand} - ${p.model_name}</h2>
-            <div class="detail-row">
-                <span class="label">Цена:</span>
-                <span class="value price">${p.price}</span>
-            </div>
-            <div class="detail-row">
-                <span class="label">Вкус:</span>
-                <span class="value">${p.taste || '-'}</span>
-            </div>
-            <div class="detail-row">
-                <span class="label">Количество затяжек:</span>
-                <span class="value">${p.puffs}</span>
-            </div>
-            <div class="detail-row">
-                <span class="label">В наличии:</span>
-                <span class="value stock">${p.stock} шт.</span>
-            </div>
-
-            <div style="margin-top: 15px; font-size: 0.9em; color: gray; text-align: left;">
-                <p>ℹ️ 100% Оригинальная продукция</p>
-            </div>
-        </div>
-`;
-
-        const addBtn = document.getElementById('add-to-cart-btn');
-        addBtn.onclick = () => addToCart(p);
-    } else {
-        container.innerHTML = '<p>Товар не найден.</p>';
-    }
-}
-
-/**
- * Toggle Bonus Input Section
- */
-function toggleBonusInput() {
-    const useBonuses = document.querySelector('input[name="use_bonuses"]:checked')?.value;
-    const bonusBlock = document.getElementById('bonus-input-block');
-
-    if (useBonuses === 'yes' && bonusBlock) {
-        bonusBlock.style.display = 'block';
-        loadAvailableBonuses();
-    } else if (bonusBlock) {
-        bonusBlock.style.display = 'none';
-        const bonusInput = document.getElementById('bonus-amount');
-        if (bonusInput) bonusInput.value = 0;
-        updateOverallTotal();
-    }
-}
-
-/**
- * Toggle Discount Input Section
- */
-function toggleDiscountInput() {
-    const useDiscount = document.querySelector('input[name="use_discount"]:checked')?.value;
-    const discountBlock = document.getElementById('discount-input-block');
-    const discountMsg = document.getElementById('discount-applied-msg');
-
-    if (useDiscount === 'yes' && discountBlock) {
-        discountBlock.style.display = 'block';
-        loadAvailableDiscounts();
-    } else if (discountBlock) {
-        discountBlock.style.display = 'none';
-        if (discountMsg) discountMsg.style.display = 'none';
-
-        // Reset select to 'none'
-        const select = document.getElementById('discount-select');
-        if (select) select.value = 'none';
-
-        updateOverallTotal();
-    }
-}
-
-async function loadAvailableDiscounts() {
-    const userId = getUserId();
-    if (!userId) return;
-
-    const select = document.getElementById('discount-select');
-    if (!select) return;
-
-    // Preserve existing options if we want (e.g. 'None')
-    // But usually we can rebuild.
-    select.innerHTML = '<option value="none">Проверка...</option>';
-
-    // Force fresh check to ensure consistency with profile status
-    const isNewUser = await checkUserEligibility(userId, true);
-
-    select.innerHTML = '<option value="none">-- Выберите скидку --</option>';
-
-    if (isNewUser) {
-        const opt = document.createElement('option');
-        opt.value = 'new_client_10';
-        opt.textContent = '🔥 Скидка Нового Клиента (-10%)';
-        select.appendChild(opt);
-    }
-    // 2. Dynamic Promo (from DB)
-    if (loadedPromoInfo) {
-        const option = document.createElement('option');
-        option.value = loadedPromoInfo.code;
-        // e.g. "🎒 Скидка Путник (10%)" or "❄️ АКЦИЯ (15%)"
-        const labelSafe = loadedPromoInfo.label || loadedPromoInfo.code;
-        let valSuffix = "";
-        if (loadedPromoInfo.type === 'percent') valSuffix = `- ${loadedPromoInfo.value}% `;
-        else valSuffix = `- ${loadedPromoInfo.value}₽`;
-
-        option.textContent = `${labelSafe} (${valSuffix})`;
-        select.appendChild(option);
-    }
-
-    if (select.options.length === 1) { // Only "Choose discount" option
-        const opt = document.createElement('option');
-        opt.value = 'none';
-        opt.disabled = true;
-        opt.textContent = 'Нет активных скидок';
-        select.appendChild(opt);
-    }
-}
-
-/**
- * Load and display available bonuses
- */
-async function loadAvailableBonuses() {
-    // getUserId already imported
-    const userId = getUserId();
-    const availableEl = document.getElementById('available-bonuses');
-    const bonusInput = document.getElementById('bonus-amount');
-
-    const { getUserBonuses, syncBonuses } = await import('./services/bonus-system.js');
-    await syncBonuses(userId);
-    const availableBonuses = getUserBonuses(userId);
-
-    if (availableEl) availableEl.textContent = availableBonuses;
-    if (bonusInput) bonusInput.max = availableBonuses;
-
-    // Disable "Yes" option if 0 bonuses
-    const yesRadio = document.querySelector('input[name="use_bonuses"][value="yes"]');
-    const noRadio = document.querySelector('input[name="use_bonuses"][value="no"]');
-
-    if (yesRadio && availableBonuses === 0) {
-        yesRadio.disabled = true;
-        // Also style the parent label to look disabled if needed
-        yesRadio.parentElement.style.opacity = "0.5";
-        yesRadio.parentElement.style.cursor = "not-allowed";
-
-        // If it was checked, uncheck it and check 'no'
-        if (yesRadio.checked) {
-            yesRadio.checked = false;
-            if (noRadio) {
-                noRadio.checked = true;
-                // Trigger change event to hide the input
-                toggleBonusInput();
-            }
-        }
-    } else if (yesRadio) {
-        yesRadio.disabled = false;
-        yesRadio.parentElement.style.opacity = "1";
-        yesRadio.parentElement.style.cursor = "pointer";
-    }
-}
-
-/**
- * MAIN TOTAL CALCULATOR (Handles Discounts + Bonuses)
- */
-function updateOverallTotal() {
-    const cart = getCart();
-    const originalTotal = Math.round(cart.reduce((sum, item) => sum + (item.price * item.quantity), 0));
-
-    let currentTotal = originalTotal;
-
-    // 1. Apply Discount
-    const select = document.getElementById('discount-select');
-    let discountAmount = 0;
-
-    if (select && select.offsetParent !== null) { // if visible
-        if (select.value === 'new_client_10') {
-            discountAmount = Math.round(originalTotal * 0.10);
-            currentTotal -= discountAmount;
-
-            const msg = document.getElementById('discount-applied-msg');
-            if (msg) {
-                msg.style.display = 'block';
-                msg.textContent = `Применена скидка 10 % (-${discountAmount} ₽)`;
-            }
-        }
-        // Dynamic Promo Calculation
-        else if (loadedPromoInfo && select.value === loadedPromoInfo.code) {
-            if (loadedPromoInfo.type === 'percent') {
-                discountAmount = Math.round(originalTotal * (loadedPromoInfo.value / 100));
-            } else {
-                discountAmount = Number(loadedPromoInfo.value);
-            }
-            currentTotal -= discountAmount;
-
-            const msg = document.getElementById('discount-applied-msg');
-            if (msg) {
-                msg.style.display = 'block';
-                const label = loadedPromoInfo.label || "Скидка";
-                msg.textContent = `Применена "${label}"(-${discountAmount} ₽)`;
-            }
-        }
-        else {
-            // Fallback or Unknown
-            const msg = document.getElementById('discount-applied-msg');
-            if (msg) msg.style.display = 'none';
-        }
-    }
-
-    // 2. Apply Bonuses
-    const bonusInput = document.getElementById('bonus-amount');
-    const bonusDiscountInfo = document.getElementById('bonus-discount-info');
-    const bonusDiscountAmount = document.getElementById('bonus-discount-amount');
-
-    let bonusesToUse = 0;
-    if (bonusInput && bonusInput.offsetParent !== null) { // if visible
-        bonusesToUse = parseInt(bonusInput.value) || 0;
-        const maxBonuses = parseInt(bonusInput.max) || 0;
-
-        // Limit
-        if (bonusesToUse > maxBonuses) {
-            bonusesToUse = maxBonuses;
-            bonusInput.value = maxBonuses;
-        }
-
-        // Cannot use more bonuses than price
-        if (bonusesToUse > currentTotal) {
-            bonusesToUse = currentTotal;
-            // We don't change input value here to not annoy user, but we limit math
-        }
-    }
-
-    const finalTotal = Math.max(0, currentTotal - bonusesToUse);
-
-    // Update UI
-    const checkoutSum = document.getElementById('checkout-sum');
-    if (checkoutSum) {
-        if (discountAmount > 0 || bonusesToUse > 0) {
-            checkoutSum.innerHTML = `${finalTotal} ₽ <span style="font-size: 0.7em; color: #aaa; text-decoration: line-through;">${originalTotal} ₽</span>`;
-            checkoutSum.style.color = "#00ff88"; // Green for discounted
-        } else {
-            checkoutSum.textContent = `${finalTotal} ₽`;
-            checkoutSum.style.color = "white";
-        }
-    }
-
-    // Update Bonus UI info
-    if (bonusDiscountInfo && bonusDiscountAmount) {
-        if (bonusesToUse > 0) {
-            bonusDiscountInfo.style.display = 'block';
-            bonusDiscountAmount.textContent = bonusesToUse;
-        } else {
-            bonusDiscountInfo.style.display = 'none';
-        }
-    }
-}
