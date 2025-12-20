@@ -1,10 +1,13 @@
 import { getUserId, getActivePromoCode } from './services/user-id.js';
-import { fetchClientData, fetchOrders } from './services/api.js';
+import { fetchClientData, fetchOrders, fetchDiscountInfo } from './services/api.js';
 import { loadModal } from './services/modal-loader.js';
 
 // Storage keys
 const CUSTOM_NAME_KEY = 'juicy_custom_name';
 const CUSTOM_AVATAR_KEY = 'juicy_custom_avatar';
+
+// State
+let loadedPromoInfo = null;
 
 loadModal('promo');
 
@@ -16,6 +19,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.log("Profile: User ID:", userId);
 
     initUserProfile(tg);
+
+    // Dynamic Promo Load
+    const activeCode = getActivePromoCode();
+    if (activeCode) {
+        console.log("Profile: Loading promo info for", activeCode);
+        const info = await fetchDiscountInfo(activeCode);
+        if (info && info.found && info.active) {
+            loadedPromoInfo = info;
+        }
+    }
+
     await loadBonusPoints(userId);
 
 });
@@ -169,6 +183,9 @@ function initUserProfile(tg) {
 /**
  * Show Promo Modal
  */
+/**
+ * Show Promo Modal
+ */
 window.showPromoModal = async function () {
     const modal = document.getElementById('promo-modal');
     const list = document.getElementById('promo-list');
@@ -187,26 +204,24 @@ window.showPromoModal = async function () {
         const history = await fetchOrders(userId);
         if (Array.isArray(history) && history.length === 0) {
             isNewUser = true;
-            // We can update cache for other parts of app, but here we prioritize freshness
             sessionStorage.setItem('is_new_user_cached', 'true');
         } else {
             isNewUser = false;
             sessionStorage.setItem('is_new_user_cached', 'false');
         }
 
-        // Always show the New Client promo, but toggle status
         promos.push({
             icon: '🔥',
             title: 'Скидка Нового Клиента',
             desc: 'Скидка 10% на первый заказ.',
             status: isNewUser ? 'Активна' : 'Использован',
-            statusColor: isNewUser ? '#00ff88' : '#ff4444' // Green or Red
+            statusColor: isNewUser ? '#00ff88' : '#ff4444'
         });
     } catch (e) {
         console.error("Promo check error", e);
     }
 
-    // 2. Bonus Program (Always active)
+    // 2. Bonus Program
     promos.push({
         icon: '💎',
         title: 'Бонусная Программа',
@@ -215,16 +230,45 @@ window.showPromoModal = async function () {
         statusColor: '#00ff88'
     });
 
-    // 3. Traveler Discount (Activation via QR)
-    const activePromo = getActivePromoCode();
-    if (activePromo === 'TRAVELER') {
-        promos.push({
-            icon: '🎒',
-            title: 'Путник - скидка 10%',
-            desc: 'Секретная скидка 10% на один заказ.',
-            status: 'Активна',
-            statusColor: '#ff00ff' // Magenta
-        });
+    // 3. Dynamic Discount (from DB or LocalStorage)
+    const activeCode = getActivePromoCode();
+    if (activeCode) {
+        // If we have loaded dynamic info from server
+        if (loadedPromoInfo && loadedPromoInfo.code === activeCode) {
+            const label = loadedPromoInfo.label || activeCode;
+            const desc = loadedPromoInfo.description || "Секретная скидка";
+            let valStr = "";
+            if (loadedPromoInfo.type === 'percent') valStr = ` (-${loadedPromoInfo.value}%)`;
+            else valStr = ` (-${loadedPromoInfo.value}₽)`;
+
+            promos.push({
+                icon: loadedPromoInfo.icon || '🎟️',
+                title: label + valStr,
+                desc: desc,
+                status: 'АКТИВНА',
+                statusColor: '#ff00ff'
+            });
+        }
+        // Fallback or Unknown (Hardcoded TRAVELER just in case)
+        else if (activeCode === 'TRAVELER') {
+            promos.push({
+                icon: '🎒',
+                title: 'Путник - скидка 10%',
+                desc: 'Секретная скидка 10% на один заказ.',
+                status: 'АКТИВНА',
+                statusColor: '#ff00ff'
+            });
+        }
+        // Fallback for custom code not yet loaded
+        else {
+            promos.push({
+                icon: '🎟️',
+                title: `Промокод: ${activeCode}`,
+                desc: 'Скидка активирована.',
+                status: 'АКТИВНА',
+                statusColor: '#ff00ff'
+            });
+        }
     }
 
     // Render
@@ -258,12 +302,12 @@ function showToast(message) {
         toast = document.createElement('div');
         toast.id = 'toast-notification';
         toast.style.cssText = `
-            position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.9); color: white; padding: 12px 24px;
-            border-radius: 20px; z-index: 1000; font-size: 0.95em;
-            opacity: 0; transition: opacity 0.3s; pointer-events: none;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-        `;
+    position: fixed; bottom: 80px; left: 50 %; transform: translateX(-50 %);
+    background: rgba(0, 0, 0, 0.9); color: white; padding: 12px 24px;
+    border - radius: 20px; z - index: 1000; font - size: 0.95em;
+    opacity: 0; transition: opacity 0.3s; pointer - events: none;
+    box - shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    `;
         document.body.appendChild(toast);
     }
 

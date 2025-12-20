@@ -1,4 +1,3 @@
-// js/services/api.js
 import { CONFIG, API_HEADERS } from '../config.js?v=FINAL_ORDERS_FIX_017';
 console.log("🚀 API Loaded. Target URL:", CONFIG.ORDER_API_URL);
 
@@ -167,5 +166,25 @@ export async function fetchBonusHistory(userId) {
     } catch (e) {
         console.error("Fetch bonus history error:", e);
         return [];
+    }
+}
+
+/**
+ * Fetch discount info by code
+ * @param {string} code Promo code to check
+ * @returns {Promise<Object>}
+ */
+export async function fetchDiscountInfo(code) {
+    if (!code) return null;
+    const url = `${CONFIG.ORDER_API_URL}?action=getDiscount&code=${encodeURIComponent(code)}&_t=${Date.now()}`;
+    try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error("Failed to fetch discount info");
+        const data = await response.json();
+        // data looks like { found: true, active: true, value: 10, ... }
+        return data;
+    } catch (e) {
+        console.error("Fetch discount info error:", e);
+        return null; // Return null if network fails
     }
 }

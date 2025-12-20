@@ -1,5 +1,5 @@
 // js/cart.js
-import { checkStock, submitOrder, fetchProductById, updateProductStock, fetchOrders } from './services/api.js?v=V_FIX_DESIGN_036';
+import { checkStock, submitOrder, fetchProductById, updateProductStock, fetchOrders, fetchDiscountInfo } from './services/api.js?v=V_FIX_DESIGN_036';
 import { getUserId, getActivePromoCode } from './services/user-id.js'; // IMPORTED
 import { showToast, showComingSoon, closeComingSoon } from './utils/ui.js';
 
@@ -27,6 +27,7 @@ function saveCart(cart) {
 
 // Cache/State for Discount
 let cachedUserDiscountEligibility = null; // Memory cache
+let loadedPromoInfo = null; // Динамическая инфа о промокоде с сервера
 
 // Helper to reliably check eligibility with LocalStorage caching
 async function checkUserEligibility(userId, bypassCache = false) {
@@ -47,7 +48,7 @@ async function checkUserEligibility(userId, bypassCache = false) {
     // 3. Fetch from Network
     try {
         const history = await fetchOrders(userId);
-        console.log(`[CHECK] checkUserEligibility userId=${userId}, historyLength=${history?.length}, bypass=${bypassCache}`);
+        console.log(`[CHECK] checkUserEligibility userId = ${userId}, historyLength = ${history?.length}, bypass = ${bypassCache} `);
 
         if (Array.isArray(history) && history.length === 0) {
             cachedUserDiscountEligibility = true;
@@ -100,7 +101,7 @@ export async function addToCart(productOrId) {
         } else {
             cart.push({
                 id: productId, // Changed from product_id
-                name: `${product.brand} ${product.model_name} ${product.taste ? ' - ' + product.taste : ''}`,
+                name: `${product.brand} ${product.model_name} ${product.taste ? ' - ' + product.taste : ''} `,
                 price: Number(product.price),
                 quantity: quantity,
                 image_url: product.image_url
@@ -142,7 +143,7 @@ export async function changeQuantity(productId, delta) {
         try {
             const stock = await checkStock(productId);
             if (newQuantity > stock) {
-                showToast(`Больше нет в наличии (Макс: ${stock})`, 'error');
+                showToast(`Больше нет в наличии(Макс: ${stock})`, 'error');
                 return;
             }
         } catch (e) {
@@ -178,7 +179,7 @@ export async function renderCart() {
 
     if (cart.length === 0) {
         cartContainer.innerHTML = `
-            <div style="text-align: center; padding: 40px 20px;">
+    < div style = "text-align: center; padding: 40px 20px;" >
                 <p style="color: #888; font-size: 1.2em; margin-bottom: 20px;">Корзина пуста 😔</p>
                 <button onclick="window.location.href='catalogue.html'" style="
                     background: linear-gradient(90deg, #00f3ff, #0066ff);
@@ -191,8 +192,8 @@ export async function renderCart() {
                     cursor: pointer;
                     box-shadow: 0 4px 15px rgba(0, 243, 255, 0.3);
                 ">Перейти в каталог</button>
-            </div>
-        `;
+            </div >
+    `;
         if (cartFooter) cartFooter.style.display = 'none';
         return;
     }
@@ -209,7 +210,7 @@ export async function renderCart() {
         cartItem.className = 'cart-card';
 
         cartItem.innerHTML = `
-            <img src="${item.image_url || 'img/vape_icon.png'}" class="cart-item-img" style="width: 60px; height: 60px; object-fit: cover; border-radius: 8px; border: 1px solid var(--neon-blue);">
+    < img src = "${item.image_url || 'img/vape_icon.png'}" class="cart-item-img" style = "width: 60px; height: 60px; object-fit: cover; border-radius: 8px; border: 1px solid var(--neon-blue);" >
             
             <div class="cart-item-info" style="flex: 1; margin-left: 15px;">
                 <h4 style="margin: 0 0 5px 0;">${item.name}</h4>
@@ -224,7 +225,7 @@ export async function renderCart() {
                 </div>
                 <div onclick="removeItem(${index})" style="color: var(--neon-pink); cursor: pointer; padding: 5px;">🗑</div>
             </div>
-        `;
+`;
         // Styling matches previous iteration
         cartItem.style.display = 'flex';
         cartItem.style.alignItems = 'center';
@@ -322,12 +323,12 @@ export async function submitOrderForm() {
 
             if (modal && listContainer) {
                 // Format the list of items nicely
-                const errorListHtml = outOfStockItems.map(i => `<div style="margin-bottom: 5px;">• ${i}</div>`).join('');
+                const errorListHtml = outOfStockItems.map(i => `< div style = "margin-bottom: 5px;" >• ${i}</div > `).join('');
                 listContainer.innerHTML = errorListHtml;
                 modal.style.display = 'flex'; // Uses flex centering from CSS
             } else {
                 // Fallback (should not happen if HTML is updated)
-                const msg = `К сожалению, кто-то успел купить раньше вас:\n\n${outOfStockItems.join('\n')}\n\nПожалуйста, скорректируйте корзину.`;
+                const msg = `К сожалению, кто - то успел купить раньше вас: \n\n${outOfStockItems.join('\n')} \n\nПожалуйста, скорректируйте корзину.`;
                 alert(msg);
             }
 
@@ -368,29 +369,33 @@ export async function submitOrderForm() {
     const discountSelect = document.getElementById('discount-select');
 
     // Only apply if user said "Yes" AND selected the specific discount
-    if (useDiscount === 'yes' && discountSelect && discountSelect.value === 'new_client_10') {
+    if (useDiscount === 'yes' && discountSelect) {
+        if (discountSelect.value === 'new_client_10') {
+            // STRICT CHECK: Verify eligibility one last time before submitting
+            const userId = getUserId();
+            // Force a fresh check using logic defined in this file
+            const isEligible = await checkUserEligibility(userId, true); // ensure fresh check
 
-        // STRICT CHECK: Verify eligibility one last time before submitting
-        const userId = getUserId();
-        // Force a fresh check using logic defined in this file
-        const isEligible = await checkUserEligibility(userId, true); // ensure fresh check
+            if (!isEligible) {
+                showToast("К сожалению, для вас данная скидка больше не доступна. Поставьте галочку 'нет' либо выберите другую доступную скидку.", 'error');
+                // Re-enable button
+                btn.disabled = false;
+                btn.innerText = "Подтвердить Заказ";
+                return; // STOP THE ORDER
+            }
 
-        if (!isEligible) {
-            showToast("К сожалению, для вас данная скидка больше не доступна. Поставьте галочку 'нет' либо выберите другую доступную скидку.", 'error');
-            // Re-enable button
-            btn.disabled = false;
-            btn.innerText = "Подтвердить Заказ";
-            return; // STOP THE ORDER
+            discountApplied = Math.round(originalCartTotal * 0.10);
+            finalTotal = originalCartTotal - discountApplied;
+        } else if (loadedPromoInfo && discountSelect.value === loadedPromoInfo.code) {
+            // Apply dynamic promo
+            if (loadedPromoInfo.type === 'percent') {
+                discountApplied = Math.round(originalCartTotal * (loadedPromoInfo.value / 100));
+            } else {
+                discountApplied = Number(loadedPromoInfo.value);
+            }
+            finalTotal = originalCartTotal - discountApplied;
         }
-
-        discountApplied = Math.round(originalCartTotal * 0.10);
-        finalTotal = originalCartTotal - discountApplied;
-    } else if (useDiscount === 'yes' && discountSelect && discountSelect.value === 'traveler_10') {
-        // TRAVELER DISCOUNT LOGIC
-        discountApplied = Math.round(originalCartTotal * 0.10);
-        finalTotal = originalCartTotal - discountApplied;
     }
-
 
 
     // --- BONUS PAYMENT PROCESSING ---
@@ -410,7 +415,7 @@ export async function submitOrderForm() {
             const availableBonuses = getUserBonuses(currentUserId);
 
             if (requestedBonuses > availableBonuses) {
-                showToast(`У вас недостаточно бонусов. Доступно: ${availableBonuses}`, 'error');
+                showToast(`У вас недостаточно бонусов.Доступно: ${availableBonuses} `, 'error');
                 btn.disabled = false;
                 btn.innerText = "Подтвердить Заказ";
                 return;
@@ -434,7 +439,6 @@ export async function submitOrderForm() {
             username: getTelegramUsername(),
             referrer_id: (await import('./services/bonus-system.js')).getReferrer(currentUserId)
         },
-        promo_code: (useDiscount === 'yes' && discountSelect) ? discountSelect.value : null,
         items: cart,
         total: finalTotal,
         original_total: originalCartTotal,
@@ -442,9 +446,12 @@ export async function submitOrderForm() {
     };
 
     if (discountApplied > 0) {
-        orderPayload.new_user_discount = discountApplied;
+        orderPayload.new_user_discount = discountApplied; // This field name is misleading if it's not new user discount
+        // Add active promo code if selected
+        if (discountSelect && discountSelect.value !== 'new_client_10') {
+            orderPayload.promo_code = discountSelect.value; // e.g., 'traveler_10' or 'winter_15'
+        }
     }
-
 
 
     if (bonusesUsed > 0) {
@@ -472,6 +479,14 @@ export async function submitOrderForm() {
             sessionStorage.removeItem('is_new_user_cached');
             cachedUserDiscountEligibility = false;
 
+            // FIX: Remove Promo if used
+            if (discountSelect && discountSelect.value !== 'new_client_10') {
+                // Если использован любой промокод (не автоматическая скидка), удаляем его
+                localStorage.removeItem('juicy_active_promo');
+                console.log(`[CART] Promo '${discountSelect.value}' removed from storage.`);
+                loadedPromoInfo = null;
+            }
+
             // Deduct bonuses handled by server
             if (bonusesUsed > 0) {
                 console.log(`Server requested to deduct ${bonusesUsed} bonuses`);
@@ -487,12 +502,12 @@ export async function submitOrderForm() {
                 window.location.href = 'index.html';
             };
         } else {
-            showToast(`Ошибка: ${result.message}`, 'error');
+            showToast(`Ошибка: ${result.message} `, 'error');
             btn.disabled = false;
             btn.innerText = "Подтвердить Заказ";
         }
     } catch (e) {
-        showToast(`Ошибка сети: ${e.message}`, 'error');
+        showToast(`Ошибка сети: ${e.message} `, 'error');
         btn.disabled = false;
         btn.innerText = "Подтвердить Заказ";
     }
@@ -561,12 +576,22 @@ async function initializeDiscountAvailability() {
     const userId = getUserId();
     if (!userId) return;
 
+    // Load Promo Info if exists
+    const localPromo = getActivePromoCode();
+    if (localPromo) {
+        console.log("Loading info for promo:", localPromo);
+        const info = await fetchDiscountInfo(localPromo);
+        if (info && info.found && info.active) {
+            loadedPromoInfo = info;
+            console.log("Promo info loaded:", info);
+        }
+    }
+
     // Check eligibility (bypass cache for accuracy)
     const isNewUser = await checkUserEligibility(userId, true);
 
     // If we add more discounts later, add checking logic here
-    const hasTraveler = (getActivePromoCode() === 'TRAVELER');
-    const hasAnyDiscount = isNewUser || hasTraveler;
+    const hasAnyDiscount = isNewUser || (loadedPromoInfo !== null);
 
     const yesRadio = document.querySelector('input[name="use_discount"][value="yes"]');
     const noRadio = document.querySelector('input[name="use_discount"][value="no"]');
@@ -646,31 +671,31 @@ async function initProductDetails() {
         };
 
         container.innerHTML = `
-            <img src="${p.image_url || 'img/vape_icon.png'}" class="detail-image">
-            <div class="detail-panel">
-                <h2>${p.brand} - ${p.model_name}</h2>
-                <div class="detail-row">
-                    <span class="label">Цена:</span>
-                    <span class="value price">${p.price}</span>
-                </div>
-                <div class="detail-row">
-                    <span class="label">Вкус:</span>
-                    <span class="value">${p.taste || '-'}</span>
-                </div>
-                <div class="detail-row">
-                    <span class="label">Количество затяжек:</span>
-                    <span class="value">${p.puffs}</span>
-                </div>
-                <div class="detail-row">
-                    <span class="label">В наличии:</span>
-                    <span class="value stock">${p.stock} шт.</span>
-                </div>
-                
-                <div style="margin-top: 15px; font-size: 0.9em; color: gray; text-align: left;">
-                    <p>ℹ️ 100% Оригинальная продукция</p>
-                </div>
+    < img src = "${p.image_url || 'img/vape_icon.png'}" class="detail-image" >
+        <div class="detail-panel">
+            <h2>${p.brand} - ${p.model_name}</h2>
+            <div class="detail-row">
+                <span class="label">Цена:</span>
+                <span class="value price">${p.price}</span>
             </div>
-        `;
+            <div class="detail-row">
+                <span class="label">Вкус:</span>
+                <span class="value">${p.taste || '-'}</span>
+            </div>
+            <div class="detail-row">
+                <span class="label">Количество затяжек:</span>
+                <span class="value">${p.puffs}</span>
+            </div>
+            <div class="detail-row">
+                <span class="label">В наличии:</span>
+                <span class="value stock">${p.stock} шт.</span>
+            </div>
+
+            <div style="margin-top: 15px; font-size: 0.9em; color: gray; text-align: left;">
+                <p>ℹ️ 100% Оригинальная продукция</p>
+            </div>
+        </div>
+`;
 
         const addBtn = document.getElementById('add-to-cart-btn');
         addBtn.onclick = () => addToCart(p);
@@ -741,18 +766,19 @@ async function loadAvailableDiscounts() {
         opt.value = 'new_client_10';
         opt.textContent = '🔥 Скидка Нового Клиента (-10%)';
         select.appendChild(opt);
-        select.appendChild(opt);
     }
+    // 2. Dynamic Promo (from DB)
+    if (loadedPromoInfo) {
+        const option = document.createElement('option');
+        option.value = loadedPromoInfo.code;
+        // e.g. "🎒 Скидка Путник (10%)" or "❄️ АКЦИЯ (15%)"
+        const labelSafe = loadedPromoInfo.label || loadedPromoInfo.code;
+        let valSuffix = "";
+        if (loadedPromoInfo.type === 'percent') valSuffix = `- ${loadedPromoInfo.value}% `;
+        else valSuffix = `- ${loadedPromoInfo.value}₽`;
 
-    // 2. CHECK TRAVELER PROMO
-    const activePromo = getActivePromoCode();
-    if (activePromo === 'TRAVELER') {
-        const opt = document.createElement('option');
-        opt.value = 'traveler_10';
-        opt.textContent = '🎒 Скидка "Путник" (-10%)';
-        // Check if user is eligible (client-side pre-check, server validates strictly)
-        // We will assume yes here, server rejects if used.
-        select.appendChild(opt);
+        option.textContent = `${labelSafe} (${valSuffix})`;
+        select.appendChild(option);
     }
 
     if (select.options.length === 1) { // Only "Choose discount" option
@@ -827,9 +853,27 @@ function updateOverallTotal() {
             const msg = document.getElementById('discount-applied-msg');
             if (msg) {
                 msg.style.display = 'block';
-                msg.textContent = `Применена скидка 10% (-${discountAmount} ₽)`;
+                msg.textContent = `Применена скидка 10 % (-${discountAmount} ₽)`;
             }
-        } else {
+        }
+        // Dynamic Promo Calculation
+        else if (loadedPromoInfo && select.value === loadedPromoInfo.code) {
+            if (loadedPromoInfo.type === 'percent') {
+                discountAmount = Math.round(originalTotal * (loadedPromoInfo.value / 100));
+            } else {
+                discountAmount = Number(loadedPromoInfo.value);
+            }
+            currentTotal -= discountAmount;
+
+            const msg = document.getElementById('discount-applied-msg');
+            if (msg) {
+                msg.style.display = 'block';
+                const label = loadedPromoInfo.label || "Скидка";
+                msg.textContent = `Применена "${label}"(-${discountAmount} ₽)`;
+            }
+        }
+        else {
+            // Fallback or Unknown
             const msg = document.getElementById('discount-applied-msg');
             if (msg) msg.style.display = 'none';
         }

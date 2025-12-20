@@ -76,10 +76,13 @@ export function checkStartParams() {
     if (startParam) {
         console.log("🚀 Start Param Detected:", startParam);
 
-        if (startParam === 'DISCOUNT_TRAVELER') {
-            localStorage.setItem('juicy_active_promo', 'TRAVELER');
-            // Show toast if possible, or just log
-            console.log("✅ Promo Code TRAVELER activated!");
+        // УНИВЕРСАЛЬНАЯ ЛОГИКА:
+        // Если параметр начинается с "DISCOUNT_", то мы берем ХВОСТ как код скидки.
+        // Пример: DISCOUNT_WINTER_15 -> код WINTER_15
+        if (startParam.startsWith('DISCOUNT_')) {
+            const promoCode = startParam.replace('DISCOUNT_', '');
+            localStorage.setItem('juicy_active_promo', promoCode);
+            console.log(`✅ Promo Code '${promoCode}' activated!`);
         }
     }
 }
