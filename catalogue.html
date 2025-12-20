@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Каталог товаров</title>
+    <link rel="stylesheet" href="css/style.css?v=V_FIX_DESIGN_053">
+    <link rel="stylesheet" href="css/css_sidebar.css?v=V_FIX_DESIGN_053">
+    <link rel="stylesheet" href="css/css_chunk_responsive.css?v=V_FIX_DESIGN_053">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+
+<body>
+    <header>
+        <h1>Каталог</h1>
+    </header>
+
+    <main class="container">
+        <div id="filter-controls">
+            <input type="text" id="search-input" placeholder="Поиск по названию...">
+        </div>
+
+        <div id="product-list">
+            <p style="text-align: center; padding: 20px;">Загрузка товаров...</p>
+        </div>
+    </main>
+
+    <script src="js/sidebar.js?v=V_FIX_DESIGN_053"></script>
+    <script type="module">
+        import { initApp } from './js/app.js?v=V_FIX_DESIGN_053';
+        document.addEventListener('DOMContentLoaded', initApp);
+    </script>
+    <!-- FAB Button -->
+    <button onclick="openSidebar()" class="hamburger-btn">☰</button>
+</body>
+
+</html>
+

@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Акции и Новинки | Juicy Puff</title>
+    <link rel="stylesheet" href="css/style.css?v=V_FIX_DESIGN_053">
+    <link rel="stylesheet" href="css/css_sidebar.css?v=V_FIX_DESIGN_053">
+    <link rel="stylesheet" href="css/css_chunk_responsive.css?v=V_FIX_DESIGN_053">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+
+<body>
+    <header>
+        <h1>Акции и Новинки</h1>
+    </header>
+
+    <main class="container info-page">
+        <div class="info-section">
+            <div class="info-icon">🔥</div>
+            <h2>СКИДКА ДЛЯ НОВЫХ КЛИЕНТОВ</h2>
+            <div class="highlight-box"
+                style="text-align: center; border-color: var(--neon-pink); background: rgba(255, 0, 85, 0.1);">
+                <p style="font-size: 1.2em; color: var(--neon-pink); margin-bottom: 10px;"><strong>АКЦИЯ!</strong></p>
+                <p>Всем новым пользователям дарим скидку на первую покупку в размере</p>
+                <p
+                    style="font-size: 2.5em; font-weight: bold; color: #fff; text-shadow: 0 0 15px var(--neon-pink); margin: 15px 0;">
+                    10%</p>
+                <p style="font-size: 0.9em; opacity: 0.8;">Скидка применится автоматически в корзине при первом заказе.
+                </p>
+            </div>
+        </div>
+
+        <div class="info-section">
+            <div class="info-icon">✨</div>
+            <h2>Новинки</h2>
+            <p>Следите за обновлениями каталога! Мы регулярно пополняем ассортимент самыми сочными новинками.</p>
+        </div>
+
+        <div class="action-buttons">
+            <button onclick="window.location.href='catalogue.html'" class="btn-primary">Перейти к покупкам</button>
+            <button onclick="window.location.href='index.html'" class="btn-secondary">В меню</button>
+        </div>
+    </main>
+
+    <!-- FAB Button -->
+    <button onclick="openSidebar()" class="hamburger-btn">☰</button>
+
+    <script src="js/sidebar.js?v=V_FIX_DESIGN_053"></script>
+    <script type="module">
+        // Telegram WebApp initialization
+        if (window.Telegram && window.Telegram.WebApp) {
+            const tg = window.Telegram.WebApp;
+            tg.ready();
+            tg.expand();
+        }
+    </script>
+</body>
+
+</html>
+

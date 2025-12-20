@@ -1,0 +1,46 @@
+/* Success Modal (Center Screen) */
+.success-modal {
+    display: none;
+    /* Hidden by default */
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    z-index: 1000;
+    justify-content: center;
+    align-items: center;
+    backdrop-filter: blur(5px);
+}
+
+.success-modal-content {
+    background: linear-gradient(135deg, rgba(20, 20, 35, 0.95), rgba(5, 5, 16, 0.98));
+    border: 2px solid var(--neon-blue);
+    padding: 40px;
+    border-radius: 15px;
+    text-align: center;
+    width: 90%;
+    max-width: 400px;
+    box-shadow: 0 0 30px rgba(0, 243, 255, 0.3);
+    clip-path: polygon(0 15px,
+            15px 0,
+            100% 0,
+            100% calc(100% - 15px),
+            calc(100% - 15px) 100%,
+            0 100%);
+}
+
+.success-modal h3 {
+    color: var(--neon-blue);
+    font-family: var(--font-heading);
+    font-size: 1.8em;
+    margin-bottom: 15px;
+    text-shadow: 0 0 10px var(--neon-blue);
+}
+
+.success-modal p {
+    color: var(--text-main);
+    font-size: 1.1em;
+    line-height: 1.5;
+}

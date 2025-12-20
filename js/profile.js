@@ -1,0 +1,275 @@
+import { getUserId, getActivePromoCode } from './services/user-id.js';
+import { fetchClientData, fetchOrders } from './services/api.js';
+import { loadModal } from './services/modal-loader.js';
+
+// Storage keys
+const CUSTOM_NAME_KEY = 'juicy_custom_name';
+const CUSTOM_AVATAR_KEY = 'juicy_custom_avatar';
+
+loadModal('promo');
+
+document.addEventListener('DOMContentLoaded', async () => {
+    const tg = window.Telegram?.WebApp;
+    if (tg) tg.expand();
+
+    const userId = getUserId();
+    console.log("Profile: User ID:", userId);
+
+    initUserProfile(tg);
+    await loadBonusPoints(userId);
+
+});
+
+// ... (initUserProfile remains same) ...
+
+/**
+ * Load and Display Bonus Points (Server)
+ */
+async function loadBonusPoints(userId) {
+    const bonusElement = document.getElementById('bonus-amount');
+    if (!bonusElement) return;
+
+    // Show loading state if empty
+    if (bonusElement.textContent === '0' || bonusElement.textContent === '') {
+        bonusElement.textContent = '...';
+    }
+
+    try {
+        const data = await fetchClientData(userId);
+
+        let displayBonus = 0;
+        if (data && typeof data.bonus_balance !== 'undefined') {
+            displayBonus = data.bonus_balance;
+        }
+
+        // Update UI
+        bonusElement.textContent = displayBonus;
+
+        // Update Local Cache (optional, for consistency across tabs)
+        const BONUS_KEY = 'juicy_bonus_' + userId;
+        localStorage.setItem(BONUS_KEY, String(displayBonus));
+
+    } catch (e) {
+        console.error("Failed to load profile bonuses", e);
+        // Fallback to cache
+        const BONUS_KEY = 'juicy_bonus_' + userId;
+        const cached = localStorage.getItem(BONUS_KEY);
+        bonusElement.textContent = cached || '0';
+    }
+}
+
+/**
+ * Refresh bonus balance (manual trigger)
+ */
+window.refreshBonuses = async function () {
+    const btn = document.querySelector('.bonus-refresh-btn');
+    if (btn) btn.style.transform = 'rotate(360deg)';
+
+    const userId = getUserId();
+    await loadBonusPoints(userId);
+
+    // Show visual feedback
+    const bonusElement = document.getElementById('bonus-amount');
+    if (bonusElement) {
+        bonusElement.style.color = '#00ff88';
+        setTimeout(() => {
+            bonusElement.style.color = '';
+            if (btn) btn.style.transform = '';
+        }, 500);
+    }
+}
+
+/**
+ * Initialize User Profile (Avatar & Name)
+ */
+function initUserProfile(tg) {
+    const avatarImg = document.getElementById('profile-avatar');
+    const nameDisplay = document.getElementById('profile-name');
+
+    // Get Telegram User Data
+    const tgUser = tg?.initDataUnsafe?.user;
+
+    // Avatar
+    let avatarUrl = localStorage.getItem(CUSTOM_AVATAR_KEY);
+    if (!avatarUrl && tgUser?.photo_url) {
+        avatarUrl = tgUser.photo_url;
+    }
+    if (avatarUrl) {
+        avatarImg.src = avatarUrl;
+    } else {
+        avatarImg.src = 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + getUserId();
+    }
+
+    // Name
+    let userName = localStorage.getItem(CUSTOM_NAME_KEY);
+    if (!userName && tgUser) {
+        userName = tgUser.first_name || '';
+        if (tgUser.last_name) {
+            userName += ' ' + tgUser.last_name;
+        }
+        userName = userName.trim() || 'Гость';
+    }
+    if (!userName) userName = 'Гость';
+
+    nameDisplay.textContent = userName;
+
+    // Expose edit functions
+    window.editName = () => {
+        const nameInput = document.getElementById('profile-name-input');
+        const nameField = document.getElementById('name-edit-field');
+        nameDisplay.style.display = 'none';
+        nameInput.style.display = 'flex';
+        nameField.value = nameDisplay.textContent;
+        nameField.focus();
+    };
+
+    window.saveName = () => {
+        const nameField = document.getElementById('name-edit-field');
+        const newName = nameField.value.trim();
+        if (newName) {
+            localStorage.setItem(CUSTOM_NAME_KEY, newName);
+            nameDisplay.textContent = newName;
+            showToast('✅ Имя обновлено!');
+        }
+        document.getElementById('profile-name-input').style.display = 'none';
+        nameDisplay.style.display = 'inline-block';
+    };
+
+    window.editAvatar = () => {
+        document.getElementById('avatar-upload-input').click();
+    };
+
+    window.handleAvatarUpload = (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        if (!file.type.startsWith('image/')) {
+            showToast('⚠️ Выберите изображение');
+            return;
+        }
+
+        if (file.size > 2 * 1024 * 1024) {
+            showToast('⚠️ Файл слишком большой (макс. 2МБ)');
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const dataUrl = e.target.result;
+            localStorage.setItem(CUSTOM_AVATAR_KEY, dataUrl);
+            avatarImg.src = dataUrl;
+            showToast('✅ Аватар обновлен!');
+        };
+        reader.readAsDataURL(file);
+    };
+}
+
+
+
+/**
+ * Show Promo Modal
+ */
+window.showPromoModal = async function () {
+    const modal = document.getElementById('promo-modal');
+    const list = document.getElementById('promo-list');
+    if (!modal || !list) return;
+
+    modal.style.display = 'flex';
+    list.innerHTML = '<p style="color: #aaa; text-align: center;">Загрузка акций...</p>';
+
+    const userId = getUserId();
+    const promos = [];
+
+    // 1. Check New Client Discount
+    try {
+        let isNewUser = false;
+        // Always fetch fresh status, do not rely on session cache for UI display
+        const history = await fetchOrders(userId);
+        if (Array.isArray(history) && history.length === 0) {
+            isNewUser = true;
+            // We can update cache for other parts of app, but here we prioritize freshness
+            sessionStorage.setItem('is_new_user_cached', 'true');
+        } else {
+            isNewUser = false;
+            sessionStorage.setItem('is_new_user_cached', 'false');
+        }
+
+        // Always show the New Client promo, but toggle status
+        promos.push({
+            icon: '🔥',
+            title: 'Скидка Нового Клиента',
+            desc: 'Скидка 10% на первый заказ.',
+            status: isNewUser ? 'Активна' : 'Использован',
+            statusColor: isNewUser ? '#00ff88' : '#ff4444' // Green or Red
+        });
+    } catch (e) {
+        console.error("Promo check error", e);
+    }
+
+    // 2. Bonus Program (Always active)
+    promos.push({
+        icon: '💎',
+        title: 'Бонусная Программа',
+        desc: 'Кэшбэк 2% со всех покупок.',
+        status: 'Активна',
+        statusColor: '#00ff88'
+    });
+
+    // 3. Traveler Discount (Activation via QR)
+    const activePromo = getActivePromoCode();
+    if (activePromo === 'TRAVELER') {
+        promos.push({
+            icon: '🎒',
+            title: 'Путник - скидка 10%',
+            desc: 'Секретная скидка 10% на один заказ.',
+            status: 'Активна',
+            statusColor: '#ff00ff' // Magenta
+        });
+    }
+
+    // Render
+    list.innerHTML = promos.map(p => `
+        <div style="background: rgba(255, 255, 255, 0.05); border-radius: 12px; padding: 15px; margin-bottom: 10px; display: flex; align-items: flex-start; text-align: left; position: relative; overflow: hidden;">
+            <div style="font-size: 1.5em; margin-right: 15px;">${p.icon}</div>
+            <div style="flex: 1;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 5px;">
+                    <div style="color: #fff; font-weight: bold;">${p.title}</div>
+                    <div style="
+                        font-size: 0.75em; 
+                        padding: 4px 8px; 
+                        border-radius: 6px; 
+                        background: rgba(0,0,0,0.3); 
+                        border: 1px solid ${p.statusColor}; 
+                        color: ${p.statusColor};
+                        font-weight: bold;
+                        text-transform: uppercase;">
+                        ${p.status}
+                    </div>
+                </div>
+                <div style="color: #aaa; font-size: 0.9em; line-height: 1.3;">${p.desc}</div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function showToast(message) {
+    let toast = document.getElementById('toast-notification');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'toast-notification';
+        toast.style.cssText = `
+            position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.9); color: white; padding: 12px 24px;
+            border-radius: 20px; z-index: 1000; font-size: 0.95em;
+            opacity: 0; transition: opacity 0.3s; pointer-events: none;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        `;
+        document.body.appendChild(toast);
+    }
+
+    toast.textContent = message;
+    toast.style.opacity = '1';
+    setTimeout(() => {
+        toast.style.opacity = '0';
+    }, 2500);
+}

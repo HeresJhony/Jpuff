@@ -1,0 +1,146 @@
+/* =========================================
+   SHARED MODAL STYLES
+   ========================================= */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(5px);
+    z-index: 2000;
+    display: none;
+    /* JS toggles this */
+    justify-content: center;
+    align-items: center;
+}
+
+.modal-content {
+    background: rgba(10, 10, 25, 0.95);
+    border: 1px solid var(--neon-blue, #00f3ff);
+    /* Default to neon blue, override for gold */
+    border-radius: 20px;
+    padding: 25px;
+    width: 90%;
+    max-width: 400px;
+    box-shadow: 0 0 20px rgba(0, 243, 255, 0.2);
+    animation: slideUp 0.3s ease-out;
+    max-height: 80vh;
+    overflow-y: auto;
+    text-align: center;
+    position: relative;
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(50px);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.modal-close-btn {
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    background: none;
+    border: none;
+    color: white;
+    font-size: 1.5em;
+    cursor: pointer;
+    z-index: 10;
+}
+
+.modal-title {
+    margin: 0 0 20px 0;
+    font-family: 'Montserrat', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* =========================================
+   PROMO MODAL SPECIFIC (Blue Theme)
+   ========================================= */
+.promo-modal-content {
+    border-color: var(--neon-blue, #00f3ff);
+    box-shadow: 0 0 20px rgba(0, 243, 255, 0.2);
+}
+
+.promo-close-btn-styled {
+    padding: 12px 30px;
+    background: transparent;
+    border: 1px solid var(--neon-blue);
+    color: var(--neon-blue);
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: bold;
+    margin-top: 15px;
+    transition: all 0.3s ease;
+}
+
+.promo-close-btn-styled:hover {
+    background: rgba(0, 243, 255, 0.1);
+    box-shadow: 0 0 10px rgba(0, 243, 255, 0.3);
+}
+
+/* =========================================
+   BONUS HISTORY SPECIFIC (Gold Theme)
+   ========================================= */
+.bonus-history-content {
+    border-color: #ffd700;
+    box-shadow: 0 0 20px rgba(255, 215, 0, 0.2);
+    text-align: left;
+    /* History usually needs left align */
+}
+
+/* =========================================
+   QR MODAL SPECIFIC
+   ========================================= */
+.qr-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.9);
+    z-index: 3000;
+    display: none;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+}
+
+.qr-modal-content {
+    text-align: center;
+    animation: zoomIn 0.3s ease-out;
+}
+
+.qr-modal-image {
+    max-width: 90%;
+    max-height: 80vh;
+    border: 5px solid white;
+    border-radius: 10px;
+}
+
+.qr-modal-hint {
+    color: #aaa;
+    margin-top: 15px;
+    font-size: 0.9em;
+}
+
+@keyframes zoomIn {
+    from {
+        transform: scale(0.5);
+        opacity: 0;
+    }
+
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}

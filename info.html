@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Важная информация | Juicy Puff</title>
+    <meta name="description"
+        content="Правила магазина, гарантия, доставка и важная информация для покупателей Juicy Puff">
+    <link rel="stylesheet" href="css/style.css?v=V_FIX_DESIGN_053">
+    <link rel="stylesheet" href="css/css_sidebar.css?v=V_FIX_DESIGN_053">
+    <link rel="stylesheet" href="css/css_chunk_responsive.css?v=V_FIX_DESIGN_053">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+
+<body>
+    <header>
+        <h1>Важная информация</h1>
+    </header>
+
+    <main class="container info-page">
+        <div class="info-intro">
+            <p>Привет! Чтобы наши сделки проходили быстро и без проблем, ознакомься с правилами магазина.
+                <strong>Оформление заказа означает, что Вы согласны с этими пунктами.</strong>
+            </p>
+        </div>
+
+        <div class="info-section">
+            <div class="info-icon">🔞</div>
+            <h2>1. ВОЗРАСТНОЕ ОГРАНИЧЕНИЕ</h2>
+            <p>Мы продаем товар строго <strong>18+</strong>. При встрече я могу попросить подтвердить возраст
+                (паспорт/права).</p>
+            <p class="warning">Если вам нет 18 — не трать наше время, продажа не состоится.</p>
+        </div>
+
+        <div class="info-section">
+            <div class="info-icon">🛡</div>
+            <h2>2. ГАРАНТИЯ И БРАК (ВАЖНО!)</h2>
+            <p>Одноразки — это техника, и заводской брак случается, хоть и редко.</p>
+
+            <div class="highlight-box">
+                <p><strong>👉 Проверяем товар СТРОГО на месте при получении.</strong></p>
+                <p>Вскрываешь, делаешь тягу.</p>
+            </div>
+
+            <p><strong>Если не работает/мигает/автофаерит</strong> — меняю на месте на новую без вопросов.</p>
+
+            <p><strong>Если вы забрали товар, ушли домой и пишете через час/день, что "не работает"</strong> — обмен и
+                возврат производится, но с оговоркой по причине если само устройство вдруг стало неисправно.</p>
+
+            <div class="note-box">
+                <p><strong>Почему так?</strong></p>
+                <p>Я не могу знать, что случилось с устройством после того, как оно попало к вам в руки (упало, залилось
+                    и т.д.).</p>
+                <p>Для этого вам нужно написать нашему администратору в Telegram: <a href="https://t.me/klaymont"
+                        target="_blank" class="tg-link">@klaymont</a></p>
+                <p class="thanks">Спасибо за понимание! 🙏</p>
+            </div>
+        </div>
+
+        <div class="info-section">
+            <div class="info-icon">🚚</div>
+            <h2>3. ДОСТАВКА И ВСТРЕЧА</h2>
+            <p><strong>Работаю по сёлам:</strong></p>
+
+            <div class="delivery-options">
+                <div class="delivery-card">
+                    <div class="delivery-title">✅ Бесплатная доставка</div>
+                    <p>При заказе от <strong>15 000 ₽</strong></p>
+                </div>
+
+                <div class="delivery-card">
+                    <div class="delivery-title">💰 Платная доставка</div>
+                    <p><strong>300 ₽</strong>, если заказ меньше минимального</p>
+                </div>
+
+                <div class="delivery-card">
+                    <div class="delivery-title">🏠 Самовывоз</div>
+                    <p>Можно забрать <strong>бесплатно</strong> в селе Сергеевка</p>
+                </div>
+            </div>
+
+            <div class="time-box">
+                <p><strong>⏰ Время доставки:</strong> обычно в течение 60-90 минут</p>
+                <p><strong>🕐 Часы работы:</strong> с 09:00 до 19:00</p>
+            </div>
+        </div>
+        <div class="info-section">
+            <div class="info-icon">💸</div>
+            <h2>4. ОПЛАТА</h2>
+            <ul class="payment-list">
+                <li>Перевод на карту (Сбер/Т-Банк/ВТБ).</li>
+                <li>Наличные (пожалуйста, готовьте без сдачи или предупреждайте заранее).</li>
+            </ul>
+            <div class="alert-box">
+                <p>⛔️ <strong>В ДОЛГ НЕ РАБОТАЕМ.</strong> Вообще. Даже "до завтра", "ну по братски" и "деньги
+                    сейчас друг принесёт, а мне нужно отойти".</p>
+            </div>
+        </div>
+
+        <div class="action-buttons">
+            <button onclick="window.location.href='catalogue.html'" class="btn-primary">Перейти в каталог</button>
+            <button onclick="window.location.href='index.html'" class="btn-secondary">Вернуться в меню</button>
+        </div>
+    </main>
+
+    <!-- FAB Button -->
+    <button onclick="openSidebar()" class="hamburger-btn">☰</button>
+
+    <script src="js/sidebar.js?v=V_FIX_DESIGN_053"></script>
+    <script type="module">
+        // Telegram WebApp initialization
+        if (window.Telegram && window.Telegram.WebApp) {
+            const tg = window.Telegram.WebApp;
+            tg.ready();
+            tg.expand();
+        }
+    </script>
+</body>
+
+</html>
+

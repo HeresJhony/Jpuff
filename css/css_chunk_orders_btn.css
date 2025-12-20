@@ -1,0 +1,10 @@
+.orders-btn {
+    border-color: var(--neon-purple);
+    /* Distinguish history with purple */
+    border-left-color: var(--neon-purple);
+}
+
+.orders-btn:hover {
+    background: linear-gradient(90deg, rgba(157, 0, 255, 0.3), transparent);
+    box-shadow: 0 0 20px rgba(157, 0, 255, 0.2);
+}

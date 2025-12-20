@@ -1,0 +1,19 @@
+/* Better Contrast for Checkout Form */
+#checkout-form {
+    background: rgba(5, 5, 16, 0.85);
+    /* Dark background */
+    padding: 25px;
+    border-radius: 16px;
+    border: 1px solid rgba(157, 0, 255, 0.3);
+    /* Subtle purple border */
+    backdrop-filter: blur(10px);
+    /* Glassmorphism */
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    margin-top: 10px;
+}
+
+#checkout-form h2 {
+    margin-top: 0;
+    text-shadow: 0 0 10px rgba(0, 243, 255, 0.5);
+    /* Enhance text glow */
+}

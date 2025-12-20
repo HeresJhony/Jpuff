@@ -1,0 +1,54 @@
+/* Animated Color Shift for Logo - Using CSS Filters */
+@keyframes logo-colorshift {
+    0% {
+        filter: hue-rotate(0deg) saturate(1.2) brightness(1.5) contrast(1.2);
+    }
+
+    33% {
+        filter: hue-rotate(120deg) saturate(1.3) brightness(1.6) contrast(1.2);
+    }
+
+    66% {
+        filter: hue-rotate(240deg) saturate(1.3) brightness(1.6) contrast(1.2);
+    }
+
+    100% {
+        filter: hue-rotate(360deg) saturate(1.2) brightness(1.5) contrast(1.2);
+    }
+}
+
+/* Floating Animation */
+@keyframes logo-float {
+
+    0%,
+    100% {
+        transform: translateY(0px) scale(1);
+    }
+
+    50% {
+        transform: translateY(-10px) scale(1.02);
+    }
+}
+
+/* Subtle Pulse */
+@keyframes logo-pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.95;
+    }
+}
+
+.main-logo {
+    /* Use screen blend mode which hides black */
+    mix-blend-mode: screen;
+    /* Increase brightness significantly to overpower black background */
+    animation:
+        logo-colorshift 12s ease-in-out infinite,
+        logo-float 4s ease-in-out infinite,
+        logo-pulse 3s ease-in-out infinite;
+}

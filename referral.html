@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Juicy Puff | Реферальная ссылка</title>
+    <link rel="stylesheet" href="css/style.css?v=V_REFERRAL_001">
+    <link rel="stylesheet" href="css/css_chunk_profile.css?v=V_REFERRAL_001">
+    <link rel="stylesheet" href="css/css_chunk_bonuses.css?v=V_REFERRAL_001">
+    <link rel="stylesheet" href="css/css_sidebar.css?v=V_REFERRAL_001">
+    <link rel="stylesheet" href="css/css_chunk_responsive.css?v=V_REFERRAL_001">
+    <link rel="stylesheet" href="css/modals.css?v=V_MODALS_001">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+
+<body>
+
+    <div class="container">
+
+        <h1 class="page-title">🔗 Реферальная ссылка</h1>
+
+        <!-- Referral Card -->
+        <div class="referral-card">
+            <div class="referral-content">
+                <div class="qr-wrapper">
+                    <img id="user-qr-code" src="" alt="QR Код" class="qr-image">
+                </div>
+
+                <div class="referral-title">Ваша реферальная ссылка:</div>
+
+                <div id="referral-link-box" class="referral-link-box" onclick="copyReferralLink()">
+                    Загрузка...
+                </div>
+
+                <div class="action-buttons">
+                    <button class="action-btn btn-copy" onclick="copyReferralLink()">
+                        <span>📋</span> Копировать
+                    </button>
+                    <button class="action-btn btn-share" onclick="shareNative()">
+                        <span>🔗</span> Поделиться
+                    </button>
+                </div>
+
+                <p class="share-hint">
+                    Покажите QR-код другу или отправьте ссылку любым удобным способом!
+                </p>
+            </div>
+        </div>
+
+        <!-- NEW: Bonus History Button -->
+        <button onclick="openBonusHistoryModal()" class="bonus-history-btn"
+            style="width: 100%; margin-bottom: 20px; padding: 12px; background: rgba(255, 215, 0, 0.15); border: 1px solid #ffd700; border-radius: 10px; color: #ffd700; font-weight: bold; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 10px; font-family: inherit; text-transform: uppercase; letter-spacing: 1px;">
+            <span>💎</span> История баллов
+        </button>
+
+        <!-- Referral Statistics Grid -->
+        <div class="referral-stats-grid">
+
+            <!-- Total Referrals -->
+            <div class="stat-card stat-total">
+                <div class="stat-icon">👥</div>
+                <div class="stat-info">
+                    <div class="stat-label">ВСЕГО</div>
+                    <div id="total-referrals" class="stat-value">0</div>
+                    <div class="stat-desc">рефералов</div>
+                </div>
+            </div>
+
+            <!-- Active Referrals -->
+            <div class="stat-card stat-active">
+                <div class="stat-icon">✅</div>
+                <div class="stat-info">
+                    <div class="stat-label">АКТИВНЫХ</div>
+                    <div id="active-referrals" class="stat-value">0</div>
+                    <div class="stat-desc">рефералов</div>
+                </div>
+            </div>
+
+            <!-- Earned Bonuses -->
+            <div class="stat-card stat-earned">
+                <div class="stat-icon">💰</div>
+                <div class="stat-info">
+                    <div class="stat-label">ЗАРАБОТАНО</div>
+                    <div id="earned-bonuses" class="stat-value">0</div>
+                    <div class="stat-desc">бонусов</div>
+                </div>
+            </div>
+
+            <!-- Link Clicks -->
+            <div class="stat-card stat-clicks">
+                <div class="stat-icon">🔗</div>
+                <div class="stat-info">
+                    <div class="stat-label">ПЕРЕХОДОВ</div>
+                    <div id="link-clicks" class="stat-value">0</div>
+                    <div class="stat-desc">по ссылке</div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Referral Information Blocks -->
+        <div class="referral-info-section">
+
+            <!-- How it works -->
+            <div class="info-block main-info">
+                <h3 class="info-title">Как работает реферальная программа?</h3>
+                <p class="info-text">
+                    Приглашайте друзей в нашу бонусную систему и получайте <span class="highlight-bonus">100
+                        бонусов</span> за каждого приглашённого! Ваш друг тоже получит <span class="highlight-bonus">100
+                        бонусов</span>!
+                </p>
+            </div>
+
+            <!-- Conditions -->
+            <div class="info-block conditions-block">
+                <div class="block-header">
+                    <span class="block-icon">💡</span>
+                    <span class="block-title">Условия начисления бонусов:</span>
+                </div>
+                <ul class="info-list">
+                    <li>✓ Друг регистрируется по вашей реферальной ссылке</li>
+                    <li>✓ Друг совершает <span class="highlight-yellow">первую покупку от 1000 ₽</span></li>
+                    <li>✓ Бонусы начисляются <span class="highlight-purple">автоматически</span> обоим!</li>
+                    <li>✓ За каждые потраченные <span class="highlight-yellow">1000 ₽</span> вашего друга вы получаете
+                        <span class="highlight-bonus">10 бонусов</span>!
+                    </li>
+                    <li>✓ <span class="highlight-bonus">1 бонус = 1 рублю</span> при покупке товаров за бонусы</li>
+                    <li>✓ За каждую потраченную вами <span class="highlight-yellow">1000 ₽</span> вы так же получаете
+                        <span class="highlight-bonus">20 бонусов</span>!
+                    </li>
+                </ul>
+            </div>
+
+            <!-- Important -->
+            <div class="info-block important-block">
+                <div class="block-header">
+                    <span class="block-icon">⚡</span>
+                    <span class="block-title">Важно:</span>
+                </div>
+                <ul class="info-list">
+                    <li>Минимальная сумма первой покупки: <strong>1000 ₽</strong></li>
+                    <li>Бонусы начисляются только за <span class="highlight-yellow">первую</span> покупку реферала</li>
+                    <li>Вы получаете <span class="highlight-bonus">100 бонусов</span>, ваш друг тоже получает <span
+                            class="highlight-bonus">100 бонусов</span></li>
+                </ul>
+            </div>
+
+            <!-- Usage -->
+            <div class="info-block usage-block">
+                <div class="block-header">
+                    <span class="block-icon">🎁</span>
+                    <span class="block-title">Что можно делать с бонусами:</span>
+                </div>
+                <ul class="info-list">
+                    <li>✓ Тратить на покупки в магазине</li>
+                    <li>✓ Использовать в играх и розыгрышах</li>
+                    <li>✓ Получать призы и подарки</li>
+                    <li>✓ Бонусы <strong>универсальные</strong> — без ограничений!</li>
+                </ul>
+            </div>
+
+            <!-- How to invite -->
+            <div class="info-block invite-block">
+                <div class="block-header">
+                    <span class="block-icon">💡</span>
+                    <span class="block-title">Как пригласить друзей:</span>
+                </div>
+                <ul class="info-list">
+                    <li>• Ваша ссылка уникальна — делитесь ею где угодно</li>
+                    <li>• Покажите QR-код прямо с экрана вашего телефона</li>
+                    <li>• Отправьте ссылку в мессенджеры или соцсети</li>
+                    <li>• Чем больше друзей — тем больше бонусов! 🎉</li>
+                </ul>
+            </div>
+
+        </div>
+
+        <!-- Styled Back Button -->
+        <a href="profile.html" class="profile-back-btn">
+            <span>←</span> Назад в профиль
+        </a>
+
+    </div>
+
+    <!-- Modals loaded dynamically via JS -->
+    <script type="module" src="js/referral.js?v=V_REFERRAL_001"></script>
+
+</body>
+
+</html>

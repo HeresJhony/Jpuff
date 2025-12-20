@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Juicy Puff | Главное Меню</title>
+    <link rel="stylesheet" href="css/style.css?v=V_FIX_DESIGN_053">
+    <link rel="stylesheet" href="css/css_chunk_responsive.css?v=V_FIX_DESIGN_053">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+
+<body>
+
+    <div class="container">
+
+        <img src="img/logo_cyber.png" alt="Juicy Puff Cyber Logo" class="main-logo">
+
+
+
+        <div class="menu-buttons">
+
+            <a href="promo.html" class="menu-button promo-btn">
+                <span class="icon-spacer">🔥</span> **Акции и Новинки**
+            </a>
+
+            <a href="catalogue.html" class="menu-button catalogue-btn">
+                <img src="img/vape-icon.svg" alt="Вейп" class="button-icon catalogue-icon">
+                Каталог (Одноразки)
+            </a>
+
+            <a href="cart.html" class="menu-button cart-btn">
+                <span class="icon-spacer">🛒</span> Корзина
+            </a>
+
+            <a href="profile.html" class="menu-button orders-btn">
+                <span class="icon-spacer">👤</span> Профиль
+            </a>
+
+
+
+            <a href="info.html" class="menu-button info-btn">
+                <span class="icon-spacer">📚</span> Важная информация
+            </a>
+
+        </div>
+    </div>
+
+    <div id="coming-soon-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-button" onclick="closeComingSoon()">&times;</span>
+            <h2>В разработке 🛠️</h2>
+            <p>Этот раздел скоро появится! Следите за обновлениями.</p>
+            <button onclick="closeComingSoon()">Закрыть</button>
+        </div>
+    </div>
+
+    <script type="module">
+        import { fetchProducts, fetchClientData } from './js/services/api.js?v=V_FIX_DESIGN_053';
+        import { getUserId } from './js/services/user-id.js';
+        import { showComingSoon, closeComingSoon } from './js/utils/ui.js';
+
+        // Expose for HTML onclick handlers
+        window.showComingSoon = showComingSoon;
+        window.closeComingSoon = closeComingSoon;
+
+        async function preloadCatalog() {
+            try {
+                const products = await fetchProducts();
+                if (Array.isArray(products)) {
+                    sessionStorage.setItem('preload_catalog', JSON.stringify(products));
+                    console.log("Menu: Каталог предзагружен.");
+                }
+            } catch (e) {
+                console.log("Menu: Предзагрузка каталога не удалась.");
+            }
+        }
+
+        async function preloadUserData() {
+            try {
+                const userId = getUserId();
+                console.log("Menu: Предзагрузка данных пользователя...", userId);
+
+                const data = await fetchClientData(userId);
+
+                if (data && typeof data.bonus_balance !== 'undefined') {
+                    // Save to cache immediately
+                    localStorage.setItem('juicy_bonus_' + userId, data.bonus_balance);
+                    console.log("Menu: Бонусы обновлены в кэше:", data.bonus_balance);
+                }
+            } catch (e) {
+                console.log("Menu: Ошибка предзагрузки пользователя:", e);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            preloadCatalog();
+            preloadUserData();
+        });
+
+    </script>
+
+</body>
+
+</html>

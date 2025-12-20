@@ -1,0 +1,35 @@
+/* Improved Visibility for Cart Empty State and Summary */
+.cart-summary {
+    background: rgba(5, 5, 16, 0.95);
+    border: 1px solid var(--neon-blue);
+    padding: 15px;
+    margin-top: 20px;
+    border-radius: 8px;
+    text-align: right;
+    box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(5px);
+}
+
+.cart-summary p {
+    font-size: 1.3em;
+    color: var(--text-main);
+    margin: 0;
+    font-weight: bold;
+}
+
+#total-sum {
+    color: var(--neon-pink);
+    text-shadow: 0 0 5px var(--neon-pink);
+    margin-left: 10px;
+}
+
+/* Empty Cart Message Style */
+#cart-items p {
+    background: rgba(0, 0, 0, 0.6);
+    padding: 20px;
+    border-radius: 8px;
+    color: var(--text-main);
+    font-size: 1.2em;
+    border: 1px dashed var(--text-dim);
+    backdrop-filter: blur(4px);
+}

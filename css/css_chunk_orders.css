@@ -1,0 +1,64 @@
+/* Order History Styles */
+.order-card {
+    background: var(--bg-panel);
+    border: 1px solid var(--neon-purple);
+    /* Subtle purple border */
+    border-radius: 12px;
+    padding: 15px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    transition: transform 0.2s;
+}
+
+.order-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(157, 0, 255, 0.2);
+}
+
+.order-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: 8px;
+}
+
+.order-id {
+    color: var(--neon-blue);
+    font-weight: bold;
+    font-family: var(--font-heading);
+}
+
+.order-date {
+    color: var(--text-dim);
+    font-size: 0.85em;
+}
+
+.order-items {
+    font-size: 0.95em;
+    line-height: 1.4;
+    color: var(--text-main);
+    margin-bottom: 15px;
+    white-space: pre-wrap;
+    /* Preserve newlines if any */
+}
+
+.order-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: var(--font-heading);
+}
+
+.order-total {
+    font-size: 1.1em;
+    color: var(--text-main);
+    font-weight: bold;
+}
+
+.order-status {
+    font-size: 0.9em;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    text-shadow: 0 0 5px currentColor;
+}

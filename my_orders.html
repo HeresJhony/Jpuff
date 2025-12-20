@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Мои Заказы</title>
+    <link rel="stylesheet" href="css/style.css?v=V_FIX_DESIGN_053">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        /* BONUS HISTORY MODAL STYLES */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(5px);
+            z-index: 2000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background: rgba(10, 10, 25, 0.95);
+            border: 1px solid #ffd700;
+            border-radius: 15px;
+            padding: 20px;
+            width: 90%;
+            max-width: 400px;
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.2);
+            animation: slideUp 0.3s ease-out;
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateY(50px);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <button onclick="window.location.href='index.html'" class="back-btn">← Меню</button>
+        <h1>Мои Заказы</h1>
+    </header>
+
+    <main class="container">
+
+        <!-- Bonus History Button -->
+        <button onclick="openBonusHistoryModal()" style="
+            width: 100%; 
+            margin-bottom: 20px; 
+            padding: 12px; 
+            background: rgba(255, 215, 0, 0.15); 
+            border: 1px solid #ffd700; 
+            border-radius: 10px; 
+            color: #ffd700; 
+            font-weight: bold;
+            cursor: pointer;
+            display: flex; justify-content: center; align-items: center; gap: 10px;
+        ">
+            <span>📜</span> История баллов
+        </button>
+
+        <div id="orders-list">
+            <p style="text-align: center; padding: 30px;">Загрузка истории заказов...</p>
+        </div>
+    </main>
+
+    <!-- Modal for Bonus History -->
+    <div id="bonus-history-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content" style="max-height: 80vh; overflow-y: auto;">
+            <div class="modal-header"
+                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h3 style="margin: 0; color: #ffd700;">История баллов</h3>
+                <button onclick="document.getElementById('bonus-history-modal').style.display='none'"
+                    style="background: none; border: none; color: white; font-size: 1.5em; cursor: pointer;">&times;</button>
+            </div>
+            <div id="bonus-history-container">
+                <p>Загрузка...</p>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="js/orders-page.js"></script>
+</body>
+
+</html>

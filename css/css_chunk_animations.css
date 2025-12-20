@@ -1,0 +1,197 @@
+/* ========================================================= */
+/* SMOOTH ANIMATIONS FOR CATALOG & SHOP */
+/* ========================================================= */
+
+/* Fade-in animation for product cards */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Subtle scale on hover */
+@keyframes subtlePulse {
+
+    0%,
+    100% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.02);
+    }
+}
+
+/* Product cards fade in on load */
+.product-card {
+    animation: fadeInUp 0.6s ease-out forwards;
+    opacity: 0;
+}
+
+/* Stagger animation for multiple cards */
+.product-card:nth-child(1) {
+    animation-delay: 0.1s;
+}
+
+.product-card:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.product-card:nth-child(3) {
+    animation-delay: 0.3s;
+}
+
+.product-card:nth-child(4) {
+    animation-delay: 0.4s;
+}
+
+.product-card:nth-child(5) {
+    animation-delay: 0.5s;
+}
+
+.product-card:nth-child(6) {
+    animation-delay: 0.6s;
+}
+
+.product-card:nth-child(7) {
+    animation-delay: 0.7s;
+}
+
+.product-card:nth-child(8) {
+    animation-delay: 0.8s;
+}
+
+/* Enhanced hover effect for product cards */
+.product-card:hover {
+    transform: translateY(-8px) scale(1.02);
+    box-shadow: 0 15px 40px rgba(255, 0, 85, 0.3);
+}
+
+/* Menu buttons fade in */
+.menu-button {
+    animation: fadeInUp 0.5s ease-out forwards;
+    opacity: 0;
+}
+
+.menu-button:nth-child(1) {
+    animation-delay: 0.1s;
+}
+
+.menu-button:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.menu-button:nth-child(3) {
+    animation-delay: 0.3s;
+}
+
+.menu-button:nth-child(4) {
+    animation-delay: 0.4s;
+}
+
+.menu-button:nth-child(5) {
+    animation-delay: 0.5s;
+}
+
+/* Smooth transitions for all interactive elements */
+button,
+.menu-button,
+.product-card,
+.cart-item,
+.order-card {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Cart items slide in */
+.cart-item {
+    animation: fadeInUp 0.4s ease-out forwards;
+    opacity: 0;
+}
+
+.cart-item:nth-child(1) {
+    animation-delay: 0.1s;
+}
+
+.cart-item:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.cart-item:nth-child(3) {
+    animation-delay: 0.3s;
+}
+
+.cart-item:nth-child(4) {
+    animation-delay: 0.4s;
+}
+
+.cart-item:nth-child(5) {
+    animation-delay: 0.5s;
+}
+
+/* Order cards animation */
+.order-card {
+    animation: fadeInUp 0.5s ease-out forwards;
+    opacity: 0;
+}
+
+.order-card:nth-child(1) {
+    animation-delay: 0.1s;
+}
+
+.order-card:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.order-card:nth-child(3) {
+    animation-delay: 0.3s;
+}
+
+.order-card:nth-child(4) {
+    animation-delay: 0.4s;
+}
+
+.order-card:nth-child(5) {
+    animation-delay: 0.5s;
+}
+
+/* Button press effect */
+button:active,
+.menu-button:active {
+    transform: scale(0.95);
+}
+
+/* Smooth page transitions */
+body {
+    animation: fadeInUp 0.4s ease-out;
+}
+
+/* Loading shimmer for images */
+@keyframes shimmer {
+    0% {
+        background-position: -1000px 0;
+    }
+
+    100% {
+        background-position: 1000px 0;
+    }
+}
+
+.product-card img {
+    background: linear-gradient(90deg,
+            rgba(255, 255, 255, 0) 0%,
+            rgba(255, 255, 255, 0.05) 50%,
+            rgba(255, 255, 255, 0) 100%);
+    background-size: 1000px 100%;
+    animation: shimmer 2s infinite;
+}
+
+.product-card img[src] {
+    animation: none;
+    background: none;
+}

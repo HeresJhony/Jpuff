@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Juicy Puff | Бонусы</title>
+    <link rel="stylesheet" href="css/style.css?v=V_BONUS_001">
+    <link rel="stylesheet" href="css/css_chunk_profile.css?v=V_BONUS_001">
+    <link rel="stylesheet" href="css/css_chunk_bonuses.css?v=V_BONUS_001">
+    <link rel="stylesheet" href="css/css_chunk_responsive.css?v=V_BONUS_001">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+
+<body>
+
+    <div class="container bonuses-container">
+
+        <h1 class="page-title bonuses-title">Реферальная программа</h1>
+        <p class="bonuses-subtitle">Приглашайте друзей — получайте бонусы вместе! 💜</p>
+
+        <!-- Referral Stats Grid -->
+        <div class="referral-stats-grid">
+
+            <!-- Total Referrals -->
+            <div class="stat-card stat-total">
+                <div class="stat-icon">👥</div>
+                <div class="stat-info">
+                    <div class="stat-label">ВСЕГО</div>
+                    <div id="total-referrals" class="stat-value">0</div>
+                    <div class="stat-desc">рефералов</div>
+                </div>
+            </div>
+
+            <!-- Active Referrals -->
+            <div class="stat-card stat-active">
+                <div class="stat-icon">✅</div>
+                <div class="stat-info">
+                    <div class="stat-label">АКТИВНЫХ</div>
+                    <div id="active-referrals" class="stat-value">0</div>
+                    <div class="stat-desc">рефералов</div>
+                </div>
+            </div>
+
+            <!-- Earned Bonuses -->
+            <div class="stat-card stat-earned">
+                <div class="stat-icon">💰</div>
+                <div class="stat-info">
+                    <div class="stat-label">ЗАРАБОТАНО</div>
+                    <div id="earned-bonuses" class="stat-value">0</div>
+                    <div class="stat-desc">бонусов</div>
+                </div>
+            </div>
+
+            <!-- Link Clicks -->
+            <div class="stat-card stat-clicks">
+                <div class="stat-icon">🔗</div>
+                <div class="stat-info">
+                    <div class="stat-label">ПЕРЕХОДОВ</div>
+                    <div id="link-clicks" class="stat-value">0</div>
+                    <div class="stat-desc">по ссылке</div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Back Button -->
+        <a href="profile.html" class="profile-back-btn">
+            <span>←</span> Назад в профиль
+        </a>
+
+    </div>
+
+    <script type="module" src="js/bonuses.js?v=V_BONUS_001"></script>
+
+</body>
+
+</html>

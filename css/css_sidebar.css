@@ -1,0 +1,253 @@
+/* ... (предыдущий контент файла остается, я его не трогаю, просто добавляю в конец, но write_to_file перезапишет. Нужно использовать append или replace. Лучше использую replace для вставки в конец или просто допишу в файл если он не пустой. А, у меня нет append. Придется использовать replace для добавления в конец.) */
+
+/* Sidebar Menu Styles */
+.sidebar-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 10001;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s;
+    backdrop-filter: blur(4px);
+}
+
+.sidebar-overlay.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.sidebar {
+    position: fixed;
+    top: 0;
+    left: -280px;
+    /* Hidden by default */
+    width: 260px;
+    height: 100vh;
+
+    /* Complex Cyberpunk Background */
+    background-color: #050510;
+    background-image:
+        linear-gradient(135deg, rgba(20, 20, 30, 0.95), rgba(10, 10, 20, 0.98)),
+        repeating-linear-gradient(90deg, rgba(0, 243, 255, 0.03) 0px, rgba(0, 243, 255, 0.03) 1px, transparent 1px, transparent 30px),
+        repeating-linear-gradient(0deg, rgba(0, 243, 255, 0.03) 0px, rgba(0, 243, 255, 0.03) 1px, transparent 1px, transparent 30px);
+
+    border-right: 1px solid var(--neon-blue);
+    box-shadow: 0 0 20px rgba(0, 243, 255, 0.1);
+
+    z-index: 10002;
+    transition: left 0.3s cubic-bezier(0.4, 0.0, 0.2, 1), visibility 0.3s;
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    visibility: hidden;
+}
+
+.sidebar.active {
+    left: 0;
+    visibility: visible;
+}
+
+/* Header with Centered Title */
+.sidebar-header {
+    display: flex;
+    justify-content: center;
+    /* Center the title */
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    position: relative;
+    /* Context for close button */
+    border-bottom: 2px solid var(--neon-blue);
+}
+
+.sidebar-title {
+    font-size: 1.8em;
+    font-weight: 800;
+    color: white;
+    text-transform: uppercase;
+    letter-spacing: 4px;
+    text-shadow:
+        0 0 10px var(--neon-blue),
+        0 0 20px var(--neon-blue);
+    font-family: 'Orbitron', 'Montserrat', sans-serif;
+    /* Use theme font if available */
+    margin: 0;
+}
+
+/* Close button style removed/handled in HTML */
+
+.sidebar-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* Styled Menu Links */
+.sidebar-link {
+    display: flex;
+    align-items: center;
+    padding: 10px 15px;
+    color: #e0e0e0;
+    text-decoration: none;
+    font-size: 1.1em;
+    border-radius: 4px;
+    /* Sharper corners for cyber look */
+    transition: all 0.3s;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-left: 3px solid transparent;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Hover Effect - Neon Slide */
+.sidebar-link:hover {
+    background: linear-gradient(90deg, rgba(0, 243, 255, 0.1), transparent);
+    border-color: var(--neon-blue);
+    border-left-color: var(--neon-pink);
+    color: white;
+    padding-left: 25px;
+    /* Slide content right */
+    box-shadow: 0 0 15px rgba(0, 243, 255, 0.1);
+}
+
+/* Active State */
+.sidebar-link.active {
+    background: linear-gradient(90deg, rgba(157, 0, 255, 0.15), transparent);
+    border-color: var(--neon-purple);
+    border-left-color: var(--neon-purple);
+    color: white;
+    font-weight: bold;
+    box-shadow: 0 0 10px rgba(157, 0, 255, 0.2);
+}
+
+.sidebar-icon {
+    margin-right: 15px;
+    font-size: 1.3em;
+    width: 30px;
+    text-align: center;
+    filter: drop-shadow(0 0 5px currentColor);
+    /* Glow icons */
+}
+
+/* Specific colors for icons on hover */
+.sidebar-link:nth-child(1):hover .sidebar-icon {
+    color: var(--neon-pink);
+}
+
+.sidebar-link:nth-child(2):hover .sidebar-icon {
+    color: var(--neon-blue);
+}
+
+.sidebar-link:nth-child(3):hover .sidebar-icon {
+    color: var(--neon-purple);
+}
+
+.sidebar-link:nth-child(4):hover .sidebar-icon {
+    color: #00ff88;
+}
+
+.sidebar-link:nth-child(5):hover .sidebar-icon {
+    color: #ffaa00;
+}
+
+
+/* Bottom Info */
+.sidebar .sidebar-footer {
+    padding-top: 10px;
+    text-align: center;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    color: #666;
+    font-size: 0.8em;
+    margin-top: 5px;
+}
+
+
+/* Floating Hamburger Button Style (FAB) */
+.hamburger-btn {
+    position: fixed;
+    bottom: 30px;
+    /* Distance from bottom */
+    left: 50%;
+    transform: translateX(-50%);
+    /* absolute center */
+
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+
+    background: rgba(10, 10, 15, 0.85);
+    /* Semi-transparent dark */
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--neon-blue);
+    color: var(--neon-blue);
+
+    font-size: 1.8em;
+    padding: 0;
+    margin: 0;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    cursor: pointer;
+    z-index: 2000;
+    /* Above everything (modals, footers) */
+    box-shadow: 0 0 15px rgba(0, 243, 255, 0.3), 0 5px 20px rgba(0, 0, 0, 0.5);
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.hamburger-btn:active {
+    transform: translateX(-50%) scale(0.9);
+    box-shadow: 0 0 25px rgba(0, 243, 255, 0.6);
+    background: rgba(0, 243, 255, 0.1);
+}
+
+.hamburger-btn:hover {
+    box-shadow: 0 0 20px rgba(0, 243, 255, 0.5);
+    transform: translateX(-50%) translateY(-3px);
+}
+
+/* Adjust position if page has a fixed footer */
+body.has-footer .hamburger-btn {
+    bottom: 90px;
+    width: 50px;
+    /* Slightly smaller to be less intrusive */
+    height: 50px;
+    font-size: 1.5em;
+    opacity: 0.9;
+}
+/* STAR GLOW ANIMATION */
+.tree-star-glow {
+    position: absolute;
+    top: -5px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 60px;
+    height: 60px;
+    background: radial-gradient(circle, rgba(255, 50, 50, 1) 0%, rgba(255, 200, 0, 0.4) 40%, transparent 70%);
+    border-radius: 50%;
+    filter: blur(4px);
+    mix-blend-mode: screen;
+    animation: starPulse 1.2s infinite ease-in-out alternate;
+    pointer-events: none;
+    z-index: 10;
+}
+
+@keyframes starPulse {
+    0% {
+        opacity: 0.6;
+        transform: translateX(-50%) scale(0.9);
+        box-shadow: 0 0 10px rgba(255, 0, 0, 0.3);
+    }
+    100% {
+        opacity: 1;
+        transform: translateX(-50%) scale(1.4);
+        box-shadow: 0 0 30px rgba(255, 50, 0, 0.8);
+    }
+}
+
