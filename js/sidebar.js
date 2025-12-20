@@ -115,15 +115,22 @@ function initDraggableFab() {
     if (!fab) return;
 
     // 1. Restore saved position
+    // 1. Restore saved position (CLAMPED)
     const savedPos = localStorage.getItem('juicy_fab_pos');
     if (savedPos) {
         try {
             const pos = JSON.parse(savedPos);
-            // Apply saved coords
-            fab.style.left = pos.left + 'px';
-            fab.style.top = pos.top + 'px';
-            // Important: override default CSS centering/bottom
+            // Re-calc boundaries on load
+            const maxW = window.innerWidth - (fab.offsetWidth || 60);
+            const maxH = window.innerHeight - (fab.offsetHeight || 60);
+
+            const safeLeft = Math.max(0, Math.min(pos.left, maxW));
+            const safeTop = Math.max(0, Math.min(pos.top, maxH));
+
+            fab.style.left = safeLeft + 'px';
+            fab.style.top = safeTop + 'px';
             fab.style.bottom = 'auto';
+            fab.style.right = 'auto';
             fab.style.transform = 'none';
         } catch (e) {
             console.error('Error loading fab position', e);
@@ -132,26 +139,45 @@ function initDraggableFab() {
 
     // 2. Drag Logic
     let offsetX, offsetY;
-    let isMoving = false;
+    let startPageX, startPageY;
+    let isDraggingReal = false;
 
     const startDrag = (e) => {
         const touch = e.touches ? e.touches[0] : e;
         const rect = fab.getBoundingClientRect();
+
         offsetX = touch.clientX - rect.left;
         offsetY = touch.clientY - rect.top;
-        isMoving = false;
+
+        startPageX = touch.clientX;
+        startPageY = touch.clientY;
+
+        isDraggingReal = false;
+
+        // KILL TRANSITION for instant follow (fixes "lag")
+        fab.style.transition = 'none';
     };
 
     const onDrag = (e) => {
-        e.preventDefault(); // Prevent scrolling while dragging button
-
         const touch = e.touches ? e.touches[0] : e;
+
+        // Calculate Distance Moved
+        const dist = Math.hypot(touch.clientX - startPageX, touch.clientY - startPageY);
+
+        // Threshold: 5px (fixes "click blocked by micro-move")
+        if (dist < 5) return;
+
+        // If we crossed threshold, consume event
+        if (e.cancelable) e.preventDefault();
+
+        isDraggingReal = true;
+        window.fabIsDragging = true; // Signal to click handler to block
 
         // New XY
         let x = touch.clientX - offsetX;
         let y = touch.clientY - offsetY;
 
-        // Clamp to screen edges
+        // Clamp
         const w = window.innerWidth;
         const h = window.innerHeight;
         const btnW = fab.offsetWidth;
@@ -160,43 +186,44 @@ function initDraggableFab() {
         x = Math.max(0, Math.min(x, w - btnW));
         y = Math.max(0, Math.min(y, h - btnH));
 
-        // Apply immediately
         fab.style.left = x + 'px';
         fab.style.top = y + 'px';
         fab.style.bottom = 'auto';
         fab.style.transform = 'none';
-
-        isMoving = true;
-        window.fabIsDragging = true; // Signal to click handler to ignore next click
     };
 
     const endDrag = (e) => {
-        if (isMoving) {
-            // Save final position to localStorage
+        // Restore Transition for hover effects
+        fab.style.transition = '';
+
+        if (isDraggingReal) {
+            // Save final position
             const rect = fab.getBoundingClientRect();
             localStorage.setItem('juicy_fab_pos', JSON.stringify({
                 left: rect.left,
                 top: rect.top
             }));
 
-            // Reset flag after a short delay to ensure click handler sees it
+            // Reset flag with delay
             setTimeout(() => {
                 window.fabIsDragging = false;
             }, 100);
+        } else {
+            // It was a click (or tiny move)
+            window.fabIsDragging = false;
         }
-        isMoving = false;
+        isDraggingReal = false;
     };
 
-    // Attach Touch Events (Mobile)
+    // Attach Events
     fab.addEventListener('touchstart', startDrag, { passive: false });
     fab.addEventListener('touchmove', onDrag, { passive: false });
     fab.addEventListener('touchend', endDrag);
 
-    // Attach Mouse Events (Desktop)
     fab.addEventListener('mousedown', (e) => {
         startDrag(e);
         const mouseMove = (e) => {
-            if (e.buttons !== 1) { // Left click released outside
+            if (e.buttons !== 1) {
                 mouseUp();
                 return;
             }

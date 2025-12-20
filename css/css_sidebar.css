@@ -1,4 +1,4 @@
-/* ... (предыдущий контент файла остается, я его не трогаю, просто добавляю в конец, но write_to_file перезапишет. Нужно использовать append или replace. Лучше использую replace для вставки в конец или просто допишу в файл если он не пустой. А, у меня нет append. Придется использовать replace для добавления в конец.) */
+﻿/* ... (РїСЂРµРґС‹РґСѓС‰РёР№ РєРѕРЅС‚РµРЅС‚ С„Р°Р№Р»Р° РѕСЃС‚Р°РµС‚СЃСЏ, СЏ РµРіРѕ РЅРµ С‚СЂРѕРіР°СЋ, РїСЂРѕСЃС‚Рѕ РґРѕР±Р°РІР»СЏСЋ РІ РєРѕРЅРµС†, РЅРѕ write_to_file РїРµСЂРµР·Р°РїРёС€РµС‚. РќСѓР¶РЅРѕ РёСЃРїРѕР»СЊР·РѕРІР°С‚СЊ append РёР»Рё replace. Р›СѓС‡С€Рµ РёСЃРїРѕР»СЊР·СѓСЋ replace РґР»СЏ РІСЃС‚Р°РІРєРё РІ РєРѕРЅРµС† РёР»Рё РїСЂРѕСЃС‚Рѕ РґРѕРїРёС€Сѓ РІ С„Р°Р№Р» РµСЃР»Рё РѕРЅ РЅРµ РїСѓСЃС‚РѕР№. Рђ, Сѓ РјРµРЅСЏ РЅРµС‚ append. РџСЂРёРґРµС‚СЃСЏ РёСЃРїРѕР»СЊР·РѕРІР°С‚СЊ replace РґР»СЏ РґРѕР±Р°РІР»РµРЅРёСЏ РІ РєРѕРЅРµС†.) */
 
 /* Sidebar Menu Styles */
 .sidebar-overlay {
@@ -168,27 +168,21 @@
 
 
 /* Floating Hamburger Button Style (FAB) */
+/* Floating Hamburger Button ('Neon Comet' Style) */
 .hamburger-btn {
     position: fixed;
     bottom: 30px;
-    /* Distance from bottom */
     left: 50%;
     transform: translateX(-50%);
-    /* absolute center */
 
     width: 60px;
     height: 60px;
     border-radius: 50%;
 
-    background: rgba(10, 10, 15, 0.85);
-    /* Semi-transparent dark */
-    backdrop-filter: blur(8px);
-    border: 1px solid var(--neon-blue);
+    background: transparent;
+    /* Main bg is handled by ::after */
+    border: none;
     color: var(--neon-blue);
-
-    font-size: 1.8em;
-    padding: 0;
-    margin: 0;
 
     display: flex;
     align-items: center;
@@ -196,46 +190,104 @@
 
     cursor: pointer;
     z-index: 2000;
-    /* Above everything (modals, footers) */
-    box-shadow: 0 0 15px rgba(0, 243, 255, 0.3), 0 5px 20px rgba(0, 0, 0, 0.5);
-    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+
+    /* Touch & Highlight Fixes */
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+    outline: none;
+    touch-action: none;
+
+    /* Removed box-shadow from here to prevent square artifacts */
+    transition: transform 0.2s;
 }
 
-.hamburger-btn:active {
-    transform: translateX(-50%) scale(0.9);
-    box-shadow: 0 0 25px rgba(0, 243, 255, 0.6);
-    background: rgba(0, 243, 255, 0.1);
+/* 1. The Rotating Neon Line (Gradient Border) */
+.hamburger-btn::before {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    /* Border thickness */
+    border-radius: 50%;
+    background: conic-gradient(from 0deg,
+            transparent 0%,
+            transparent 30%,
+            var(--neon-blue) 40%,
+            #d000ff 60%,
+            var(--neon-blue) 80%,
+            transparent 100%);
+    z-index: -2;
+    animation:
+        rotate-border 2s linear infinite,
+        hue-shift 6s linear infinite;
+
+    /* FORCE CIRCLE & GLOW */
+    -webkit-clip-path: circle(50% at 50% 50%);
+    clip-path: circle(50% at 50% 50%);
+
+    /* Use drop-shadow for non-square glow */
+    filter: drop-shadow(0 0 5px rgba(0, 243, 255, 0.5));
+}
+
+/* 2. The Inner Mask (Solid Button Body) */
+.hamburger-btn::after {
+    content: '';
+    position: absolute;
+    inset: 3px;
+    background: #050510;
+    border-radius: 50%;
+    z-index: -1;
+    box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.8);
+
+    /* Force Circle Mask */
+    -webkit-clip-path: circle(50% at 50% 50%);
+    clip-path: circle(50% at 50% 50%);
+}
+
+/* 3. The Icon */
+.hamburger-btn i {
+    font-size: 1.6em;
+    position: relative;
+    z-index: 2;
+    text-shadow: 0 0 8px var(--neon-blue);
+    transition: transform 0.3s, text-shadow 0.3s, color 0.3s;
 }
 
 .hamburger-btn:hover {
-    box-shadow: 0 0 20px rgba(0, 243, 255, 0.5);
-    transform: translateX(-50%) translateY(-3px);
+    transform: translateX(-50%) scale(1.1);
+    /* Slightly larger on hover */
 }
 
-/* Adjust position if page has a fixed footer */
-body.has-footer .hamburger-btn {
-    bottom: 90px;
-    width: 50px;
-    /* Slightly smaller to be less intrusive */
-    height: 50px;
-    font-size: 1.5em;
-    opacity: 0.9;
+.hamburger-btn:active {
+    transform: translateX(-50%) scale(0.95);
 }
-/* STAR GLOW ANIMATION */
-.tree-star-glow {
-    position: absolute;
-    top: -5px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 60px;
-    height: 60px;
-    background: radial-gradient(circle, rgba(255, 50, 50, 1) 0%, rgba(255, 200, 0, 0.4) 40%, transparent 70%);
-    border-radius: 50%;
-    filter: blur(4px);
-    mix-blend-mode: screen;
-    animation: starPulse 1.2s infinite ease-in-out alternate;
-    pointer-events: none;
-    z-index: 10;
+
+.hamburger-btn:hover i {
+    color: #ffffff !important;
+    text-shadow: 0 0 4px #fff, 0 0 8px var(--neon-blue);
+    transform: scale(1.1) translateZ(1px);
+    /* Ensure it stays on top */
+}
+
+@keyframes rotate-border {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes hue-shift {
+    0% {
+        filter: hue-rotate(0deg) drop-shadow(0 0 5px rgba(0, 243, 255, 0.5));
+    }
+
+    100% {
+        filter: hue-rotate(360deg) drop-shadow(0 0 5px rgba(0, 243, 255, 0.5));
+    }
 }
 
 @keyframes starPulse {
@@ -244,10 +296,10 @@ body.has-footer .hamburger-btn {
         transform: translateX(-50%) scale(0.9);
         box-shadow: 0 0 10px rgba(255, 0, 0, 0.3);
     }
+
     100% {
         opacity: 1;
         transform: translateX(-50%) scale(1.4);
         box-shadow: 0 0 30px rgba(255, 50, 0, 0.8);
     }
 }
-

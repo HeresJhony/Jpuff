@@ -74,10 +74,10 @@ header {
     align-items: center;
     padding: 20px 15px;
     /* More padding */
-    background: transparent;
+    background: var(--bg-dark);
     /* Cleaner look without hard line */
     /* border-bottom: 2px solid var(--neon-purple); REMOVED */
-    position: sticky;
+    position: relative;
     top: 0;
     z-index: 1000;
     height: auto;

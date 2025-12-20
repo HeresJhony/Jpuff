@@ -179,7 +179,7 @@ export async function renderCart() {
 
     if (cart.length === 0) {
         cartContainer.innerHTML = `
-    < div style = "text-align: center; padding: 40px 20px;" >
+            <div style="text-align: center; padding: 40px 20px;">
                 <p style="color: #888; font-size: 1.2em; margin-bottom: 20px;">Корзина пуста 😔</p>
                 <button onclick="window.location.href='catalogue.html'" style="
                     background: linear-gradient(90deg, #00f3ff, #0066ff);
@@ -192,7 +192,7 @@ export async function renderCart() {
                     cursor: pointer;
                     box-shadow: 0 4px 15px rgba(0, 243, 255, 0.3);
                 ">Перейти в каталог</button>
-            </div >
+            </div>
     `;
         if (cartFooter) cartFooter.style.display = 'none';
         return;
@@ -210,7 +210,7 @@ export async function renderCart() {
         cartItem.className = 'cart-card';
 
         cartItem.innerHTML = `
-    < img src = "${item.image_url || 'img/vape_icon.png'}" class="cart-item-img" style = "width: 60px; height: 60px; object-fit: cover; border-radius: 8px; border: 1px solid var(--neon-blue);" >
+    <img src="${item.image_url || 'img/vape_icon.png'}" class="cart-item-img" style="width: 60px; height: 60px; object-fit: cover; border-radius: 8px; border: 1px solid var(--neon-blue);">
             
             <div class="cart-item-info" style="flex: 1; margin-left: 15px;">
                 <h4 style="margin: 0 0 5px 0;">${item.name}</h4>
@@ -671,7 +671,7 @@ async function initProductDetails() {
         };
 
         container.innerHTML = `
-    < img src = "${p.image_url || 'img/vape_icon.png'}" class="detail-image" >
+            <img src="${p.image_url || 'img/vape_icon.png'}" class="product-detail-image" style="display:block; margin: 0 auto;">
         <div class="detail-panel">
             <h2>${p.brand} - ${p.model_name}</h2>
             <div class="detail-row">
