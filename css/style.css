@@ -34,6 +34,11 @@ body {
     position: relative;
 }
 
+/* Add padding when page has fixed footer */
+body.has-footer {
+    padding-bottom: 100px;
+}
+
 /* Utility to pull content up */
 .container>h2:first-child,
 .container>form>h2:first-child {
