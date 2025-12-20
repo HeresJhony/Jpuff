@@ -9,7 +9,7 @@ loadModal('qr');
 // Expose functions globally for HTML interactions
 // JuicyPoint Telegram Bot
 const BOT_USERNAME = 'Jpuffbot';
-const REFERRAL_BASE_URL = `https://t.me/${BOT_USERNAME}?start=`;
+const REFERRAL_BASE_URL = `https://t.me/${BOT_USERNAME}/juicy?startapp=`;
 
 document.addEventListener('DOMContentLoaded', async () => {
     const tg = window.Telegram?.WebApp;
