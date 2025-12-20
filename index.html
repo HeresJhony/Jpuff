@@ -59,10 +59,14 @@
         import { fetchProducts, fetchClientData } from './js/services/api.js?v=V_FIX_DESIGN_053';
         import { getUserId } from './js/services/user-id.js';
         import { showComingSoon, closeComingSoon } from './js/utils/ui.js';
+        import { initReferralSystem } from './js/services/referral-handler.js';
 
         // Expose for HTML onclick handlers
         window.showComingSoon = showComingSoon;
         window.closeComingSoon = closeComingSoon;
+
+        // Initialize referral tracking
+        initReferralSystem();
 
         async function preloadCatalog() {
             try {

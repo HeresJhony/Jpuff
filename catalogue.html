@@ -29,7 +29,12 @@
     <script src="js/sidebar.js?v=V_FIX_DESIGN_053"></script>
     <script type="module">
         import { initApp } from './js/app.js?v=V_FIX_DESIGN_053';
-        document.addEventListener('DOMContentLoaded', initApp);
+        import { initReferralSystem } from './js/services/referral-handler.js';
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initReferralSystem(); // Process referral links
+            initApp(); // Load catalog
+        });
     </script>
     <!-- FAB Button -->
     <button onclick="openSidebar()" class="hamburger-btn">☰</button>
