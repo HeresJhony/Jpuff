@@ -62,7 +62,7 @@ export async function submitOrder(orderData) {
     try {
         const response = await fetch(CONFIG.ORDER_API_URL, {
             method: 'POST',
-            headers: { 'Content-Type': 'text/plain' },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(orderData)
         });
         if (!response.ok) throw new Error("Order submission network error");
