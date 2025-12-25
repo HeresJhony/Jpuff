@@ -1,7 +1,8 @@
 // js/cart.js
-import { checkStock, submitOrder, fetchProductById, updateProductStock, fetchOrders, fetchDiscountInfo } from './services/api.js?v=V_FIX_DESIGN_036';
+import { checkStock, submitOrder, fetchOrders, fetchDiscountInfo } from './services/api.js';
 import { getUserId, getActivePromoCode } from './services/user-id.js'; // IMPORTED
 import { showToast, showComingSoon, closeComingSoon } from './utils/ui.js';
+import { getCart, saveCart, clearCart } from './utils/cart-storage.js';
 
 // Expose necessary functions for HTML event handlers
 window.changeQuantity = changeQuantity;
@@ -9,19 +10,10 @@ window.submitOrderForm = submitOrderForm;
 window.addToCart = addToCart;
 window.toggleBonusInput = toggleBonusInput;
 window.toggleDiscountInput = toggleDiscountInput;
-window.updateBonusPayment = updateOverallTotal; // Alias for backward compat if needed, or just use updateOverallTotal
+window.updateBonusPayment = updateOverallTotal; // Alias for backward compat
 window.updateOverallTotal = updateOverallTotal;
-// Also expose modal functions in case they are used in shared headers
 window.showComingSoon = showComingSoon;
 window.closeComingSoon = closeComingSoon;
-
-function getCart() {
-    return JSON.parse(localStorage.getItem('cart')) || [];
-}
-
-function saveCart(cart) {
-    localStorage.setItem('cart', JSON.stringify(cart));
-}
 
 // getTelegramUserId REMOVED. Use getUserId() imported from services.
 
@@ -472,7 +464,7 @@ export async function submitOrderForm() {
             }
             */
 
-            localStorage.removeItem('cart');
+            clearCart();
             sessionStorage.removeItem('preload_catalog');
 
             // Clear cached eligibility because they are no longer a new user!
@@ -861,5 +853,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
+        }
     }
 });

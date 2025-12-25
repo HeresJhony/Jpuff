@@ -5,6 +5,27 @@
 
 import { fetchProductById, checkStock } from './services/api.js';
 import { showToast } from './utils/ui.js';
+import { getCart, saveCart } from './utils/cart-storage.js';
+
+/**
+ * Helper function to create detail row safely
+ */
+function createDetailRow(label, value, valueClass = '') {
+    const row = document.createElement('div');
+    row.className = 'detail-row';
+
+    const labelSpan = document.createElement('span');
+    labelSpan.className = 'label';
+    labelSpan.textContent = label;
+
+    const valueSpan = document.createElement('span');
+    valueSpan.className = `value ${valueClass}`.trim();
+    valueSpan.textContent = value;
+
+    row.appendChild(labelSpan);
+    row.appendChild(valueSpan);
+    return row;
+}
 
 /**
  * Initialize Product Details Page
@@ -37,33 +58,39 @@ async function initProductDetails() {
             id: Number(product.id)
         };
 
-        // Render product details
-        container.innerHTML = `
-            <img src="${p.image_url || 'img/vape_icon.png'}" class="product-detail-image" style="display:block; margin: 0 auto;">
-            <div class="detail-panel">
-                <h2>${p.brand} - ${p.model_name}</h2>
-                <div class="detail-row">
-                    <span class="label">Цена:</span>
-                    <span class="value price">${p.price} ₽</span>
-                </div>
-                <div class="detail-row">
-                    <span class="label">Вкус:</span>
-                    <span class="value">${p.taste || '-'}</span>
-                </div>
-                <div class="detail-row">
-                    <span class="label">Количество затяжек:</span>
-                    <span class="value">${p.puffs}</span>
-                </div>
-                <div class="detail-row">
-                    <span class="label">В наличии:</span>
-                    <span class="value stock">${p.stock} шт.</span>
-                </div>
+        // Render product details SAFELY (prevent XSS)
+        const img = document.createElement('img');
+        img.src = p.image_url || 'img/vape_icon.png';
+        img.className = 'product-detail-image';
+        img.style.cssText = 'display:block; margin: 0 auto;';
 
-                <div style="margin-top: 15px; font-size: 0.9em; color: gray; text-align: left;">
-                    <p>ℹ️ 100% Оригинальная продукция</p>
-                </div>
-            </div>
-        `;
+        const panel = document.createElement('div');
+        panel.className = 'detail-panel';
+
+        const h2 = document.createElement('h2');
+        h2.textContent = `${p.brand} - ${p.model_name}`;
+
+        const priceRow = createDetailRow('Цена:', `${p.price} ₽`, 'price');
+        const tasteRow = createDetailRow('Вкус:', p.taste || '-');
+        const puffsRow = createDetailRow('Количество затяжек:', p.puffs);
+        const stockRow = createDetailRow('В наличии:', `${p.stock} шт.`, 'stock');
+
+        const info = document.createElement('div');
+        info.style.cssText = 'margin-top: 15px; font-size: 0.9em; color: gray; text-align: left;';
+        const infoPara = document.createElement('p');
+        infoPara.textContent = 'ℹ️ 100% Оригинальная продукция';
+        info.appendChild(infoPara);
+
+        panel.appendChild(h2);
+        panel.appendChild(priceRow);
+        panel.appendChild(tasteRow);
+        panel.appendChild(puffsRow);
+        panel.appendChild(stockRow);
+        panel.appendChild(info);
+
+        container.innerHTML = '';
+        container.appendChild(img);
+        container.appendChild(panel);
 
         // Update page title
         const pageTitle = document.getElementById('product-title');
@@ -133,20 +160,6 @@ async function addToCart(product) {
         console.error('Stock check failed:', error);
         showToast('Ошибка проверки склада', 'error');
     }
-}
-
-/**
- * Get cart from localStorage
- */
-function getCart() {
-    return JSON.parse(localStorage.getItem('cart')) || [];
-}
-
-/**
- * Save cart to localStorage
- */
-function saveCart(cart) {
-    localStorage.setItem('cart', JSON.stringify(cart));
 }
 
 // Initialize on page load

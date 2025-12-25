@@ -13,9 +13,14 @@ import { setReferrer, trackReferralClick } from './bonus-system.js';
 export function processReferralLink() {
     // Check if opened via Telegram with start parameter
     const tg = window.Telegram?.WebApp;
+
+    // NEW: Mini Apps use 'initDataUnsafe.start_param' for deep links with ?start=
+    // But we updated our link to use /app?startapp= which goes to different field
+    // However, for backwards compatibility, check both
     const startParam = tg?.initDataUnsafe?.start_param;
 
-    if (startParam) {
+    // Only process if it's NOT a promo code (those start with DISCOUNT_)
+    if (startParam && !startParam.startsWith('DISCOUNT_')) {
         handleReferralCode(startParam);
         return;
     }
