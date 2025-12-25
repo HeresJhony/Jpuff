@@ -6,102 +6,96 @@
 JuicyPoint_MVP/
 │
 ├── 📄 HTML Pages (Корневая папка)
-│   ├── index.html              # Главная страница
-│   ├── catalogue.html          # Каталог товаров
-│   ├── product_details.html    # Детали товара
+│   ├── index.html              # Главная страница (Главное меню)
+│   ├── catalogue.html          # Каталог товаров (с фильтрами)
+│   ├── product_details.html    # Карточка товара
 │   ├── cart.html               # Корзина
 │   ├── checkout.html           # Оформление заказа
 │   ├── profile.html            # Профиль пользователя
-│   ├── bonuses.html            # Статистика бонусов
+│   ├── bonuses.html            # Система бонусов
 │   ├── referral.html           # Реферальная программа
-│   ├── orders.html             # История заказов
-│   ├── my_orders.html          # Мои заказы
-│   ├── promo.html              # Промо страница
-│   └── info.html               # Информация
+│   ├── my_orders.html          # История заказов
+│   ├── promo.html              # Промо-акции
+│   └── info.html               # Важная информация
 │
-├── 🎨 css/                     # Все стили
-│   ├── style.css               # Основные стили
-│   ├── css_sidebar.css         # Боковое меню
-│   ├── css_chunk_*.css         # Модульные стили компонентов
+├── 🎨 css/                     # Стили (Модульная структура)
+│   ├── style.css               # Базовые стили и переменные
+│   ├── css_sidebar.css         # Стили бокового меню
+│   ├── modals.css              # Стили модальных окон
+│   ├── css_chunk_*.css         # Компонентные стили:
+│   │   ├── ..._profile.css     # Стили профиля
+│   │   ├── ..._animations.css  # Анимации
+│   │   ├── ..._cart_card.css   # Карточки корзины
+│   │   └── ...                 # Другие чанки
+│   └── responsive.css          # (В составе чанков)
+│
+├── 💾 js/                      # JavaScript (ES6 Modules)
+│   ├── app.js                  # Общая инициализация
+│   ├── config.js               # Конфигурация (API Endpoints)
+│   │
+│   ├── services/               # Бизнес-логика и API
+│   │   ├── api.js              # Взаимодействие с backend (Supabase/GAS)
+│   │   ├── bonus-system.js     # Логика бонусной программы
+│   │   ├── referral-handler.js # Обработка реферальных ссылок
+│   │   ├── user-id.js          # Идентификация пользователя (Telegram/UUID)
+│   │   └── modal-loader.js     # Загрузчик модальных окон
+│   │
+│   ├── utils/                  # Утилиты
+│   │   ├── ui.js               # UI хелперы (Toast, Alerts)
+│   │   ├── cart-storage.js     # Управление LocalStorage корзины
+│   │   └── filters.js          # Логика фильтрации товаров
+│   │
+│   ├── Logic Modules:          # Логика конкретных страниц
+│   │   ├── cart.js             # Управление корзиной и checkout
+│   │   ├── product-details.js  # Страница товара
+│   │   ├── catalogue.js        # Логика каталога
+│   │   ├── profile.js          # Логика профиля
+│   │   ├── referral.js         # Логика реферальной страницы
+│   │   ├── orders-page.js      # Логика истории заказов
+│   │   ├── bonuses.js          # Логика страницы бонусов
+│   │   └── sidebar.js          # Управление меню
+│
+├── 🖼️ img/                     # Ассеты
+│   ├── christmas-tree.png      # Сезонные изображения
 │   └── ...
 │
-├── 💾 js/                      # JavaScript код
-│   ├── services/               # Сервисы (API, бонусы, user-id и т.д.)
-│   │   ├── api.js
-│   │   ├── bonus-system.js
-│   │   ├── referral-handler.js
-│   │   └── user-id.js
-│   ├── utils/                  # Утилиты (UI helpers)
-│   │   └── ui.js
-│   ├── config.js               # Конфигурация (URLs, API keys)
-│   ├── cart.js                 # Логика корзины
-│   ├── catalogue.js            # Логика каталога
-│   ├── profile.js              # Логика профиля
-│   ├── bonuses.js              # Логика бонусов
-│   ├── referral.js             # Логика рефералов
-│   ├── orders.js               # Логика заказов
-│   ├── sidebar.js              # Логика меню
-│   └── my_orders.js            # История заказов
-│
-├── 🖼️ img/                     # Изображения
-│   └── christmas-tree.png
-│
-├── 📚 docs/                    # Документация и backend
-│   ├── Code.js                 # Google Apps Script (backend)
-│   ├── supabase_schema.sql     # SQL схема базы данных
+├── 📚 docs/                    # Документация
 │   ├── BONUS_SYSTEM_DOCUMENTATION.md
-│   └── LINK_TRACKING_INFO.md
+│   ├── LINK_TRACKING_INFO.md
+│   └── supabase_schema.sql     # SQL схема БД
 │
-├── 🧪 tests/                   # Тестовые файлы и утилиты
-│   ├── add_test_bonuses.html   # Инструмент для добавления бонусов
-│   ├── debug-data.js           # Дебаг скрипты
-│   ├── debug-full.js
-│   ├── test-order.js           # Тестирование заказов
-│   ├── test-telegram.js        # Тестирование Telegram
-│   └── update_paths.ps1        # Скрипт обновления путей
-│
-└── пароли.txt                  # Конфиденциальные данные
-
+└── 🧪 tests/                   # Тесты
+    ├── add_test_bonuses.html   # Инструмент начисления бонусов
+    └── ...
 ```
 
 ## 🚀 Как запустить
 
-1. **Локально:**
+1. **Локальный сервер:**
+   Приложение требует работы через HTTP-сервер для поддержки ES6 модулей (CORS).
    ```bash
-   # Запустить локальный сервер (например Python)
    python -m http.server 8000
-   # Или любой другой HTTP сервер
    ```
-
-2. **Открыть в браузере:**
+2. **В браузере:**
    ```
    http://localhost:8000
    ```
 
-## 📦 Компоненты системы
+## 📦 Стек технологий
 
-### Frontend (Веб-приложение)
-- Vanilla JavaScript (ES6 Modules)
-- CSS3 с неоновыми эффектами
-- Telegram Web App API
+- **Frontend:** HTML5, CSS3 (Native + Variables), JavaScript (ES6 Modules).
+- **State Management:** LocalStorage / SessionStorage (корзина, кэши), Event Bus (через DOM события).
+- **Backend:** Google Apps Script (Serverless функции) + Supabase (Database).
+- **Integration:** Telegram Web App (TWA).
 
-### Backend
-- **Google Apps Script** (`docs/Code.js`) - обработка заказов
-- **Supabase** - база данных (товары, заказы, клиенты)
+## 🔑 Ключевые модули
 
-### Интеграции
-- Telegram Bot API - уведомления
-- Supabase REST API - работа с данными
-
-## 🔑 Ключевые файлы
-
-| Файл | Описание |
-|------|----------|
-| `js/config.js` | API URLs, ключи доступа |
-| `docs/Code.js` | Серверная логика обработки заказов |
-| `js/services/bonus-system.js` | Система начисления бонусов |
-| `js/cart.js` | Логика корзины и оформления |
-| `пароли.txt` | ⚠️ Конфиденциальные данные |
+| Модуль | Описание |
+|--------|----------|
+| `js/cart.js` | "Сердце" покупок: добавление, валидация, подсчет скидок, отправка заказа. |
+| `js/services/api.js` | Единая точка входа для всех запросов к серверу. |
+| `js/services/bonus-system.js` | Клиентская логика расчета доступных бонусов. |
+| `js/utils/filters.js` | Сложная фильтрация каталога (вкусы, бренды, цена). |
 
 ## 💰 Бонусная система
 
@@ -111,10 +105,3 @@ JuicyPoint_MVP/
 - **1 бонус = 1 рубль** при оплате
 
 Подробнее: `docs/BONUS_SYSTEM_DOCUMENTATION.md`
-
-## 📝 Примечания
-
-- Все HTML страницы находятся в корне для простоты навигации
-- CSS модули разделены по компонентам
-- JavaScript использует ES6 модули
-- Тестовые инструменты изолированы в `tests/`
