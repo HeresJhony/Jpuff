@@ -65,7 +65,10 @@ export async function submitOrder(orderData) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(orderData)
         });
-        if (!response.ok) throw new Error("Order submission network error");
+        if (!response.ok) {
+            const errText = await response.text();
+            throw new Error(`Server Error ${response.status}: ${errText}`);
+        }
         const result = await response.json();
         console.log("[DEBUG] Google Script Response:", result);
         return result;

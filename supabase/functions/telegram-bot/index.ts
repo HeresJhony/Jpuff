@@ -15,6 +15,11 @@ const ADMIN_CHAT_ID = "978181243"; // Hardcoded or via env
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
 // --- TYPES ---
 interface OrderData {
     customer: {
@@ -38,6 +43,11 @@ interface OrderData {
 
 // --- MAIN HANDLER ---
 serve(async (req) => {
+    // 0. HANDLE OPTIONS (CORS Preflight)
+    if (req.method === 'OPTIONS') {
+        return new Response('ok', { headers: corsHeaders });
+    }
+
     try {
         const url = new URL(req.url);
 
@@ -48,7 +58,7 @@ serve(async (req) => {
             // Case A: Telegram Callback Query (Button Click)
             if (body.callback_query) {
                 await handleCallback(body.callback_query);
-                return new Response(JSON.stringify({ ok: true }), { headers: { "Content-Type": "application/json" } });
+                return new Response(JSON.stringify({ ok: true }), { headers: { "Content-Type": "application/json", ...corsHeaders } });
             }
 
             // Case B: New Order from Frontend
@@ -60,7 +70,7 @@ serve(async (req) => {
             // Case C: Telegram Message (Commands like /start)
             if (body.message) {
                 // Optional: Handle commands
-                return new Response(JSON.stringify({ ok: true }));
+                return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
             }
         }
 
@@ -72,19 +82,19 @@ serve(async (req) => {
             // 1. Get Orders
             if (action === "getOrders" && userId) {
                 const { data } = await supabase.from("orders").select("*").eq("user_id", userId).order("created_at", { ascending: false });
-                return new Response(JSON.stringify(data), { headers: { "Content-Type": "application/json" } });
+                return new Response(JSON.stringify(data), { headers: { "Content-Type": "application/json", ...corsHeaders } });
             }
 
             // 2. Get Client Data (Bonuses)
             if (action === "getClientData" && userId) {
                 const { data } = await supabase.from("clients").select("*").eq("user_id", userId).single();
-                return new Response(JSON.stringify(data || { bonus_balance: 0 }), { headers: { "Content-Type": "application/json" } });
+                return new Response(JSON.stringify(data || { bonus_balance: 0 }), { headers: { "Content-Type": "application/json", ...corsHeaders } });
             }
 
             // 3. Get Bonus History
             if (action === "getBonusHistory" && userId) {
                 const { data } = await supabase.from("bonus_transactions").select("*").eq("user_id", userId).order("created_at", { ascending: false });
-                return new Response(JSON.stringify(data || []), { headers: { "Content-Type": "application/json" } });
+                return new Response(JSON.stringify(data || []), { headers: { "Content-Type": "application/json", ...corsHeaders } });
             }
 
             // 4. Get Discount Info (Promo Code)
@@ -100,20 +110,20 @@ serve(async (req) => {
                         description: data.description,
                         type: data.type,
                         value: data.value
-                    }), { headers: { "Content-Type": "application/json" } });
+                    }), { headers: { "Content-Type": "application/json", ...corsHeaders } });
                 } else {
-                    return new Response(JSON.stringify({ found: false }), { headers: { "Content-Type": "application/json" } });
+                    return new Response(JSON.stringify({ found: false }), { headers: { "Content-Type": "application/json", ...corsHeaders } });
                 }
             }
 
-            return new Response(JSON.stringify({ status: "alive", backend: "Supabase Edge Function v2" }));
+            return new Response(JSON.stringify({ status: "alive", backend: "Supabase Edge Function v2" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
 
-        return new Response("Not Found", { status: 404 });
+        return new Response("Not Found", { status: 404, headers: corsHeaders });
 
     } catch (error) {
         console.error("Critical Error:", error);
-        return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+        return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 });
 
@@ -195,7 +205,7 @@ async function handleNewOrder(order: OrderData) {
         await sendTelegram(order.customer.user_id, clientMsg);
     }
 
-    return new Response(JSON.stringify({ status: "success", orderId: orderId }), { headers: { "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ status: "success", orderId: orderId }), { headers: { "Content-Type": "application/json", ...corsHeaders } });
 }
 
 // --- TELEGRAM CALLBACK LOGIC ---
@@ -209,8 +219,7 @@ async function handleCallback(cb: any) {
     // 1. Answer Immediately (Anti-Spinner)
     await answerCallback(cb.id);
 
-    // 2. Remove Buttons immediately
-    await editMessageMarkup(chatId, msgId, null);
+    // 2. Logic (Buttons will be removed by editMessageText)
 
     // 3. Logic
     let uiText = "";
@@ -234,9 +243,12 @@ async function handleCallback(cb: any) {
         }
     }
 
-    // 4. Send Result
+    // 4. Send Result (Edit Original)
     if (uiText) {
-        await sendMessage(chatId, uiText, msgId);
+        await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/editMessageText`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ chat_id: chatId, message_id: msgId, text: uiText })
+        });
     }
 }
 
