@@ -11,6 +11,22 @@ let allProducts = [];
 
 export async function initApp() {
     const listContainer = document.getElementById('product-list');
+
+    // Initialize Telegram Web App
+    const tg = window.Telegram?.WebApp;
+    if (tg) {
+        tg.expand();
+        try {
+            tg.setHeaderColor('#050510');
+            tg.setBackgroundColor('#050510');
+            if (tg.requestFullscreen) {
+                tg.requestFullscreen();
+            }
+        } catch (e) {
+            console.log("TG Styling Error:", e);
+        }
+    }
+
     if (!listContainer) return; // Not on catalog page
 
     // 1. Check Session Storage

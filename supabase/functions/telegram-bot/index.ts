@@ -147,9 +147,18 @@ serve(async (req) => {
                     }
                 }
 
+                // Fetch referral clicks for the referrer (userId)
+                const { data: referrerClient, error: referrerError } = await supabase
+                    .from("clients")
+                    .select("referral_clicks")
+                    .eq("user_id", userId)
+                    .single();
+                const totalClicks = referrerClient?.referral_clicks || 0;
+
                 return new Response(JSON.stringify({
                     total: total || 0,
-                    active: activeCount
+                    active: activeCount,
+                    clicks: totalClicks
                 }), { headers: { "Content-Type": "application/json", ...corsHeaders } });
             }
 
@@ -427,17 +436,45 @@ async function registerReferralLink(userId: string, referrerId: string) {
     // 1. Check if user already exists
     const { data: existing } = await supabase.from("clients").select("*").eq("user_id", userId).single();
 
-    // If user exists, we CANNOT add new referrer (Anti-abuse)
-    // UNLESS they don't have a referrer yet? No, usually only new users get it.
+    // If user exists:
     if (existing) {
-        // Optional: If you want to allow binding referrer to existing user who has none:
-        /*
-        if (!existing.referrer_id) {
-             await supabase.from("clients").update({ referrer_id: referrerId }).eq("user_id", userId);
-             return { success: true, message: "Referrer attached to existing user" };
+        // RULE: Attribute to Last Click BEFORE First Order.
+        // If they have NO orders yet, we allow changing the referrer.
+        const ordersCount = existing.total_orders || 0;
+
+        if (ordersCount === 0) {
+            // Allow overwrite!
+            // Check if it's the same referrer to avoid redundant updates
+            if (existing.referrer_id !== referrerId) {
+                await supabase.from("clients").update({ referrer_id: referrerId }).eq("user_id", userId);
+
+                // Also create ghost referrer if needed
+                // (Logic duplicated from below, safe to run)
+                {
+                    const { data: ref } = await supabase.from("clients").select("bonus_balance").eq("user_id", referrerId).single();
+                    if (!ref) {
+                        await supabase.from("clients").insert({ user_id: referrerId, name: "Пригласивший (Авто)", bonus_balance: 0 });
+                    }
+                    // Increment clicks for NEW referrer
+                    const { data: cData } = await supabase.from("clients").select("referral_clicks").eq("user_id", referrerId).single();
+                    const currentClicks = cData?.referral_clicks || 0;
+                    await supabase.from("clients").update({ referral_clicks: currentClicks + 1 }).eq("user_id", referrerId);
+                }
+
+                return { success: true, message: "Referrer updated (Last Click)" };
+            } else {
+                // Even if same referrer, maybe increment clicks? 
+                // Usually duplicate clicks from same user don't count unique clicks, but let's count them as "interactions"
+                const { data: cData } = await supabase.from("clients").select("referral_clicks").eq("user_id", referrerId).single();
+                const currentClicks = cData?.referral_clicks || 0;
+                await supabase.from("clients").update({ referral_clicks: currentClicks + 1 }).eq("user_id", referrerId);
+
+                return { success: true, message: "Click tracked" };
+            }
         }
-        */
-        return { success: false, message: "User already registered" };
+
+        // If they HAVE orders, they are locked.
+        return { success: false, message: "User already has orders, referrer locked" };
     }
 
     // 2. Register "Pre-client" with referrer
@@ -453,6 +490,17 @@ async function registerReferralLink(userId: string, referrerId: string) {
         // Ghost
         await supabase.from("clients").insert({ user_id: referrerId, name: "Пригласивший (Авто)", bonus_balance: 0 });
         refBalance = 0;
+    }
+
+    // INCREMENT CLICKS (Since someone followed the link)
+    // We increment it using our rpc helper or just direct update
+    // Since we don't have atomic Increment, we read-update (low concurrency risk for MVP)
+    // Actually, let's use rpcIncrementClicks if we had one, but let's do simple update for now.
+    // We need to fetch current clicks first (not inefficient but works)
+    {
+        const { data: cData } = await supabase.from("clients").select("referral_clicks").eq("user_id", referrerId).single();
+        const currentClicks = cData?.referral_clicks || 0;
+        await supabase.from("clients").update({ referral_clicks: currentClicks + 1 }).eq("user_id", referrerId);
     }
 
     // Create the new user record explicitly with referrer

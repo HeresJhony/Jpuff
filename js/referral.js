@@ -13,7 +13,18 @@ const REFERRAL_BASE_URL = `https://t.me/${BOT_USERNAME}/juicy?startapp=`;
 
 document.addEventListener('DOMContentLoaded', async () => {
     const tg = window.Telegram?.WebApp;
-    if (tg) tg.expand();
+    if (tg) {
+        tg.expand();
+        try {
+            tg.setHeaderColor('#050510');
+            tg.setBackgroundColor('#050510');
+            if (tg.requestFullscreen) {
+                tg.requestFullscreen();
+            }
+        } catch (e) {
+            console.log("TG Styling Error:", e);
+        }
+    }
 
     const userId = getUserId();
     console.log("Referral Page: User ID:", userId);

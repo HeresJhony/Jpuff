@@ -163,4 +163,21 @@ async function addToCart(product) {
 }
 
 // Initialize on page load
-document.addEventListener('DOMContentLoaded', initProductDetails);
+document.addEventListener('DOMContentLoaded', () => {
+    // Telegram Web App Styling
+    const tg = window.Telegram?.WebApp;
+    if (tg) {
+        tg.expand();
+        try {
+            tg.setHeaderColor('#050510');
+            tg.setBackgroundColor('#050510');
+            if (tg.requestFullscreen) {
+                tg.requestFullscreen();
+            }
+        } catch (e) {
+            console.log("TG Styling Error:", e);
+        }
+    }
+
+    initProductDetails();
+});

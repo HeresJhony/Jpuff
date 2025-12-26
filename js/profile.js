@@ -13,7 +13,20 @@ loadModal('promo');
 
 document.addEventListener('DOMContentLoaded', async () => {
     const tg = window.Telegram?.WebApp;
-    if (tg) tg.expand();
+    if (tg) {
+        tg.expand();
+        try {
+            // Set header color to match app background (dark theme)
+            tg.setHeaderColor('#050510');
+            tg.setBackgroundColor('#050510');
+            // Attempt to hide system UI (Android navigation bar)
+            if (tg.requestFullscreen) {
+                tg.requestFullscreen();
+            }
+        } catch (e) {
+            console.log("TG Styling Error:", e);
+        }
+    }
 
     const userId = getUserId();
     console.log("Profile: User ID:", userId);

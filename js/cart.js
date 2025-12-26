@@ -794,6 +794,22 @@ function updateOverallTotal() {
 
 function initCartModule() {
     console.log("Initializing Cart Module...");
+
+    // Telegram Web App Styling
+    const tg = window.Telegram?.WebApp;
+    if (tg) {
+        tg.expand();
+        try {
+            tg.setHeaderColor('#050510');
+            tg.setBackgroundColor('#050510');
+            if (tg.requestFullscreen) {
+                tg.requestFullscreen();
+            }
+        } catch (e) {
+            console.log("TG Styling Error:", e);
+        }
+    }
+
     const path = window.location.pathname;
 
     if (path.includes('cart.html')) {
