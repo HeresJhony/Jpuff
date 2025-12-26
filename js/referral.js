@@ -1,5 +1,5 @@
 import { getUserId } from './services/user-id.js';
-import { fetchClientData, fetchBonusHistory } from './services/api.js';
+import { fetchClientData, fetchBonusHistory, fetchReferralStats } from './services/api.js';
 import { loadModal } from './services/modal-loader.js';
 
 // Preload modals
@@ -203,6 +203,8 @@ function trackLinkShare(userId) {
 
 async function loadReferralStats(userId) {
     const earnedEl = document.getElementById('earned-bonuses');
+    const totalEl = document.getElementById('total-referrals');
+    const activeEl = document.getElementById('active-referrals');
 
     // 1. СРАЗУ показываем из кэша (чтобы не ждать)
     const BONUS_KEY = 'juicy_bonus_' + userId;
@@ -212,15 +214,22 @@ async function loadReferralStats(userId) {
     }
 
     try {
-        // 2. Запрашиваем свежие данные с сервера
-        const clientData = await fetchClientData(userId);
+        // 2. Запрашиваем свежие данные с сервера (параллельно)
+        const [clientData, statsData] = await Promise.all([
+            fetchClientData(userId),
+            fetchReferralStats(userId)
+        ]);
 
-        // 3. Обновляем цифру и кэш
+        // 3. Обновляем цифру баланса и кэш
         if (earnedEl) {
             const freshBonus = clientData.bonus_balance || 0;
             earnedEl.textContent = freshBonus;
             localStorage.setItem(BONUS_KEY, freshBonus);
         }
+
+        // 4. Обновляем статистику рефералов
+        if (totalEl) totalEl.textContent = statsData.total || 0;
+        if (activeEl) activeEl.textContent = statsData.active || 0;
 
         loadLocalClicks(userId);
     } catch (e) {

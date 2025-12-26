@@ -114,7 +114,46 @@ serve(async (req) => {
                 return new Response(JSON.stringify(data || []), { headers: { "Content-Type": "application/json", ...corsHeaders } });
             }
 
-            // 4. Get Discount Info (Promo Code)
+            // 4. Get Referral Stats
+            if (action === "getReferralStats" && userId) {
+                // Total Referrals
+                const { count: total, error: errTotal } = await supabase
+                    .from("clients")
+                    .select("*", { count: 'exact', head: true })
+                    .eq("referrer_id", userId);
+
+                // Active Referrals (Purchased in last 30 days)
+                // We need to find users who have referrer_id = userId AND have an order in last 30 days.
+                // Step 1: Get IDs of referrals
+                const { data: refs } = await supabase.from("clients").select("user_id").eq("referrer_id", userId);
+                let activeCount = 0;
+
+                if (refs && refs.length > 0) {
+                    const refIds = refs.map(r => r.user_id);
+                    const thirtyDaysAgo = new Date();
+                    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+                    // Step 2: Check orders for these IDs
+                    // We select distinct user_id from orders where created_at > 30 days ago and user_id is in refIds
+                    const { data: activeOrders } = await supabase
+                        .from("orders")
+                        .select("user_id")
+                        .in("user_id", refIds)
+                        .gte("created_at", thirtyDaysAgo.toISOString());
+
+                    if (activeOrders) {
+                        const uniqueActiveUsers = new Set(activeOrders.map(o => o.user_id));
+                        activeCount = uniqueActiveUsers.size;
+                    }
+                }
+
+                return new Response(JSON.stringify({
+                    total: total || 0,
+                    active: activeCount
+                }), { headers: { "Content-Type": "application/json", ...corsHeaders } });
+            }
+
+            // 5. Get Discount Info (Promo Code)
             const code = url.searchParams.get("code");
             if (action === "getDiscount" && code) {
                 const { data } = await supabase.from("discounts").select("*").eq("code", code).single();

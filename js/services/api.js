@@ -227,3 +227,20 @@ export async function registerReferralOnServer(userId, referrerId) {
         return null;
     }
 }
+
+/**
+ * Fetch detailed referral stats (total, active)
+ * @param {string} userId
+ * @returns {Promise<Object>} { total: 0, active: 0 }
+ */
+export async function fetchReferralStats(userId) {
+    const url = `${CONFIG.ORDER_API_URL}?action=getReferralStats&user_id=${userId}&_t=${Date.now()}`;
+    try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error("Failed to fetch referral stats");
+        return await response.json();
+    } catch (e) {
+        console.error("Fetch referral stats error:", e);
+        return { total: 0, active: 0 };
+    }
+}
