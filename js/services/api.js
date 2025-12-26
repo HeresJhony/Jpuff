@@ -191,3 +191,39 @@ export async function fetchDiscountInfo(code) {
         return null; // Return null if network fails
     }
 }
+
+/**
+ * Register referral link click on Server immediately
+ * @param {string} userId - New user ID
+ * @param {string} referrerId - Referrer ID
+ */
+export async function registerReferralOnServer(userId, referrerId) {
+    // Only register if we have a valid User ID (not temporary web_ unless we really want to, but here we prefer real IDs)
+    // Actually, allowing web_ IDs is fine for now as long as we merge them later by phone number.
+    // But to avoid spam, maybe we just send it.
+
+    // Check if Edge Function supports this action (We need to add it to backend too!)
+    // We will send a POST request usually, or GET with action. Let's use POST to be safe with body.
+
+    const payload = {
+        action: 'registerReferral',
+        userId: userId,
+        referrerId: referrerId
+    };
+
+    try {
+        const response = await fetch(CONFIG.ORDER_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) throw new Error("Referral registration failed");
+        const res = await response.json();
+        console.log("Referral server registration:", res);
+        return res;
+    } catch (e) {
+        console.error("Register referral error:", e);
+        return null;
+    }
+}
