@@ -5,6 +5,7 @@
 
 import { getUserId } from './user-id.js';
 import { setReferrer, trackReferralClick } from './bonus-system.js';
+import { registerReferralOnServer } from './api.js';
 
 /**
  * Check and process referral parameter from URL
@@ -37,18 +38,31 @@ export function processReferralLink() {
 /**
  * Handle referral code
  */
-function handleReferralCode(referrerId) {
+async function handleReferralCode(referrerId) {
     const currentUserId = getUserId();
 
-    // Track click
+    console.log(`Processing referral: User ${currentUserId} -> Referrer ${referrerId}`);
+
+    // Track click locally
     trackReferralClick(referrerId);
 
-    // Set referrer (only works if user doesn't have one yet)
-    const success = setReferrer(currentUserId, referrerId);
+    // 1. Try to register on Server immediately (Source of Truth)
+    // This handles the "Ghost Referrer" creation and linking in DB
+    const serverResult = await registerReferralOnServer(currentUserId, referrerId);
 
-    if (success) {
-        console.log('Referrer set:', referrerId);
-        // Could show a welcome message here
+    // 2. Update LocalStorage based on attempt
+    // If we are just testing or user is new, we FORCE the update in local storage
+    // to prevent "stuck" old referrer IDs from previous tests.
+    // In prod, serverResult logic will prevent changing referrer if already set in DB.
+
+    // Always update local if it's different, assuming server handles the "first-time-only" logic
+    // This fixes the issue where browser remembers old test ID.
+    localStorage.setItem('juicy_referrer_' + currentUserId, referrerId);
+    console.log('Referrer locally updated to:', referrerId);
+
+    if (serverResult && serverResult.success) {
+        console.log('✅ Server confirmed referral link!');
+        // Could show a toast here "You were invited by..."
     }
 }
 
