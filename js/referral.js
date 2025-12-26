@@ -227,19 +227,23 @@ async function loadReferralStats(userId) {
             localStorage.setItem(BONUS_KEY, freshBonus);
         }
 
-        // 4. Обновляем статистику рефералов
+        // 4. Обновляем статистику рефералов И кликов
         if (totalEl) totalEl.textContent = statsData.total || 0;
         if (activeEl) activeEl.textContent = statsData.active || 0;
 
-        loadLocalClicks(userId);
+        // Use server clicks
+        const clicksEl = document.getElementById('link-clicks');
+        if (clicksEl) {
+            clicksEl.textContent = statsData.clicks || 0;
+        }
+
+        // We no longer use loadLocalClicks(userId);
     } catch (e) {
         console.error("Stats load failed", e);
     }
 }
 
+// Old function kept for safety but unused
 function loadLocalClicks(userId) {
-    const STATS_KEY = `juicy_referral_stats_${userId}`;
-    let stats = JSON.parse(localStorage.getItem(STATS_KEY) || '{}');
-    const clicksEl = document.getElementById('link-clicks');
-    if (clicksEl) clicksEl.textContent = stats.linkClicks || 0;
+    // Deprecated
 }
