@@ -9,6 +9,24 @@
     <link rel="stylesheet" href="css/css_sidebar.css?v=V_FIX_DESIGN_053">
     <link rel="stylesheet" href="css/css_chunk_responsive.css?v=V_FIX_DESIGN_053">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script>
+        (function () {
+            const tg = window.Telegram?.WebApp;
+            if (tg) {
+                tg.expand();
+                try {
+                    tg.setHeaderColor('#050510');
+                    tg.setBackgroundColor('#050510');
+                    if (tg.requestFullscreen) {
+                        tg.requestFullscreen();
+                    }
+                    tg.ready();
+                } catch (e) {
+                    console.log("TG Styling Error:", e);
+                }
+            }
+        })();
+    </script>
 </head>
 
 <body>
