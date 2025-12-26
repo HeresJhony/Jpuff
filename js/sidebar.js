@@ -37,7 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             <div style="flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; margin-bottom: 10px;">
                 <!-- Tree Container -->
-                <div style="position: relative; width: 480px; max-width: 100%; transform: scale(1.95);">
+                <div style="position: relative; width: 480px; max-width: 100%; transform: scale(1.6);">
                     <!-- Tree Image -->
                     <img src="img/el2.png" alt="Christmas Tree" style="width: 100%; height: auto; display: block;">
                     
