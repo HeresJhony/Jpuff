@@ -51,9 +51,17 @@ serve(async (req) => {
     try {
         const url = new URL(req.url);
 
-        // 1. WEBHOOK FROM TELEGRAM
+        // 1. WEBHOOK FROM TELEGRAM / API POST
         if (req.method === "POST") {
-            const body = await req.json();
+            // Robust Body Parsing (Handle both JSON and Text/Plain from legacy frontend)
+            let body;
+            const rawBody = await req.text();
+            try {
+                body = JSON.parse(rawBody);
+            } catch (e) {
+                console.error("Failed to parse request body:", e);
+                return new Response(JSON.stringify({ error: "Invalid JSON body" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+            }
 
             // Case A: Telegram Callback Query (Button Click)
             if (body.callback_query) {
@@ -61,8 +69,17 @@ serve(async (req) => {
                 return new Response(JSON.stringify({ ok: true }), { headers: { "Content-Type": "application/json", ...corsHeaders } });
             }
 
-            // Case B: New Order from Frontend
+            // Case B: New Order from Frontend OR Registration Action
             // (Frontend sends pure JSON payload)
+            if (body.action === 'registerReferral') {
+                const { userId, referrerId } = body;
+                if (!userId || !referrerId) return new Response(JSON.stringify({ error: "Missing params" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+                // Logic to link referrer
+                const res = await registerReferralLink(userId, referrerId);
+                return new Response(JSON.stringify(res), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+            }
+
             if (body.customer && body.items) {
                 return await handleNewOrder(body as OrderData);
             }
@@ -166,6 +183,7 @@ async function handleNewOrder(order: OrderData) {
         customer_comment: order.customer.comment + (discountLabel ? ` [PROMO: ${order.promo_code}]` : ""),
         items: order.items,
         total: order.total,
+        bonuses_used: order.bonuses_used || 0, // Saved for refund logic
         status: "Новый"
     }).select("id").single();
 
@@ -188,18 +206,29 @@ async function handleNewOrder(order: OrderData) {
 
     // 6. Notify Telegram Admin
     const adminMsg = formatTelegramMessage(order, orderId, clientStats, discountLabel);
-    const markup = {
-        inline_keyboard: [
-            [
-                { text: "✅ Выдано", callback_data: `confirm_${orderId}` },
-                { text: "❌ Отмена", callback_data: `cancel_${orderId}` }
-            ]
+
+    // Dynamic Markup
+    const inline_keyboard: any[] = [
+        [
+            { text: "✅ Выдано", callback_data: `confirm_${orderId}` },
+            { text: "❌ Отмена", callback_data: `cancel_${orderId}` }
         ]
-    };
+    ];
+
+    // Add contact button if possible
+    if (order.customer.username) {
+        inline_keyboard.unshift([{ text: "💬 Связаться", url: `https://t.me/${order.customer.username}` }]);
+    } else if (order.customer.user_id && !String(order.customer.user_id).startsWith('web_')) {
+        inline_keyboard.unshift([{ text: "👤 Профиль", url: `tg://user?id=${order.customer.user_id}` }]);
+    }
+
+    const markup = { inline_keyboard };
     await sendTelegram(ADMIN_CHAT_ID, adminMsg, markup);
 
     // 7. Notify Client
-    if (order.customer.user_id && !order.customer.user_id.startsWith('web_')) {
+    // Ensure user_id is treated as string for check
+    const userIdStr = String(order.customer.user_id || "");
+    if (userIdStr && !userIdStr.startsWith('web_')) {
         // Only send to Telegram IDs (numeric usually, or we try anyway)
         const clientMsg = formatClientMessage(order);
         await sendTelegram(order.customer.user_id, clientMsg);
@@ -225,21 +254,41 @@ async function handleCallback(cb: any) {
     let uiText = "";
 
     // Check current status first to avoid duplicates
-    const { data: order } = await supabase.from("orders").select("status").eq("id", orderId).single();
+    const { data: order } = await supabase.from("orders").select("status, user_id, bonuses_used").eq("id", orderId).single();
 
     if (order) {
+        // Helpers for client notification
+        const userIdStr = String(order.user_id || "");
+        const isTelegramUser = userIdStr && !userIdStr.startsWith('web_');
+
         if (action === "confirm") {
             if (order.status === "completed") return; // Silent exit if duplicate
 
             await supabase.from("orders").update({ status: "completed" }).eq("id", orderId);
+            await accrueBonuses(orderId);
             uiText = `✅ Заказ #${orderId} успешно выдан!`;
+
+            // Notify Client: SUCCESS
+            if (isTelegramUser) {
+                await sendTelegram(order.user_id, `✅ Ваш заказ #${orderId} успешно выдан!\nСпасибо, что выбрали нас! 🤝`);
+            }
         }
         else if (action === "cancel") {
             if (order.status === "cancelled") return; // Silent exit
 
             await supabase.from("orders").update({ status: "cancelled" }).eq("id", orderId);
             await returnStock(orderId); // Return items
+            await refundBonuses(orderId);
             uiText = `❌ Заказ #${orderId} отменен. Товары возвращены.`;
+
+            // Notify Client: CANCEL
+            if (isTelegramUser) {
+                let msg = `❌ Ваш заказ #${orderId} был отменен.`;
+                if (order.bonuses_used > 0) {
+                    msg += `\n🔄 Возвращено бонусов: ${order.bonuses_used}`;
+                }
+                await sendTelegram(order.user_id, msg);
+            }
         }
     }
 
@@ -257,18 +306,49 @@ async function handleCallback(cb: any) {
 
 async function checkAndRegisterClient(customer: any) {
     const userId = customer.user_id || 'UNKNOWN';
-    const { data: existing } = await supabase.from("clients").select("*").eq("user_id", userId).single();
+    // Clean phone number (remove spaces, etc) for consistent search
+    const cleanPhone = customer.phone ? customer.phone.replace(/\D/g, '') : '';
+
+    // 1. Try to find by User ID
+    let { data: existing } = await supabase.from("clients").select("*").eq("user_id", userId).single();
+
+    // 2. If not found by ID, try to find by Phone
+    let foundByPhone = false;
+    if (!existing && cleanPhone.length > 5) { // Ensure phone is long enough to be valid
+        // Note: This assumes phone numbers are unique in your system
+        // We need to query where phone matches. Supabase doesn't have a simple "OR" easily across calls without query builder, 
+        // but here we do it sequentially.
+        // We need to look for phone numbers that *contain* this clean sequence or match roughly? 
+        // For now, let's assume we store raw strings but we should try to match.
+        // To be safe, let's try to match the exact string provided or the cleaned version if you store cleaned.
+        // Given the current simple MVP, we'll try to match the 'phone' column.
+        const { data: byPhone } = await supabase.from("clients").select("*").ilike('phone', `%${cleanPhone}%`).limit(1).single();
+
+        if (byPhone) {
+            existing = byPhone;
+            foundByPhone = true;
+            // UPDATE ID: Found by phone, but ID is different (or was old web_ one).
+            // Let's migrate this user to the new Telegram ID so they don't lose bonuses.
+            if (existing.user_id !== userId) {
+                await supabase.from("clients").update({ user_id: userId }).eq("id", existing.id);
+                console.log(`Merged user by phone: ${cleanPhone}. Old ID: ${existing.user_id} -> New ID: ${userId}`);
+            }
+        }
+    }
 
     if (existing) {
         return { userId, isNew: false, referrerId: existing.referrer_id, bonus_balance: existing.bonus_balance };
     }
 
-    // New Client Logic
+    // --- NEW CLIENT LOGIC ---
     let referrerId = customer.referrer_id || null;
     let initialBonus = 0;
 
-    if (referrerId && referrerId !== userId) {
-        // Auto-create referrer if missing
+    // Validate Self-Referral
+    if (referrerId === userId) referrerId = null;
+
+    if (referrerId) {
+        // Auto-create referrer if missing (Ghost Referrer Logic)
         const { data: ref } = await supabase.from("clients").select("bonus_balance").eq("user_id", referrerId).single();
 
         let refBalance = 0;
@@ -291,7 +371,7 @@ async function checkAndRegisterClient(customer: any) {
     await supabase.from("clients").insert({
         user_id: userId,
         name: customer.name,
-        phone: customer.phone,
+        phone: customer.phone, // We store the one provided
         bonus_balance: initialBonus,
         referrer_id: referrerId,
         total_orders: 1
@@ -302,27 +382,97 @@ async function checkAndRegisterClient(customer: any) {
     return { userId, isNew: true, referrerId, bonus_balance: initialBonus };
 }
 
+async function registerReferralLink(userId: string, referrerId: string) {
+    if (userId === referrerId) return { success: false, message: "Self referral" };
+
+    // 1. Check if user already exists
+    const { data: existing } = await supabase.from("clients").select("*").eq("user_id", userId).single();
+
+    // If user exists, we CANNOT add new referrer (Anti-abuse)
+    // UNLESS they don't have a referrer yet? No, usually only new users get it.
+    if (existing) {
+        // Optional: If you want to allow binding referrer to existing user who has none:
+        /*
+        if (!existing.referrer_id) {
+             await supabase.from("clients").update({ referrer_id: referrerId }).eq("user_id", userId);
+             return { success: true, message: "Referrer attached to existing user" };
+        }
+        */
+        return { success: false, message: "User already registered" };
+    }
+
+    // 2. Register "Pre-client" with referrer
+    // We create the record now so that when order comes, we know who invited them.
+
+    // Verify referrer exists or create ghost
+    const { data: ref } = await supabase.from("clients").select("bonus_balance").eq("user_id", referrerId).single();
+    let refBalance = 0;
+
+    if (ref) {
+        refBalance = ref.bonus_balance || 0;
+    } else {
+        // Ghost
+        await supabase.from("clients").insert({ user_id: referrerId, name: "Пригласивший (Авто)", bonus_balance: 0 });
+        refBalance = 0;
+    }
+
+    // Create the new user record explicitly with referrer
+    // We don't award bonuses YET. We wait for the order.
+    // BUT we need to store them.
+
+    const { error } = await supabase.from("clients").insert({
+        user_id: userId,
+        name: "Гость", // Will be updated on order
+        bonus_balance: 0, // Will be updated on order (Welcome Bonus)
+        referrer_id: referrerId,
+        total_orders: 0
+    });
+
+    if (error) return { success: false, message: error.message };
+
+    // IMPORTANT: We do NOT award money here. Only on order.
+    // But we secured the link.
+
+    return { success: true, message: "Referral linked" };
+}
+
 async function processOrderBonuses(order: OrderData, userId: string, referrerId: string | null) {
-    // 1. Spend
+    // 1. Spend ONLY (Cashback is now on confirm)
     if (order.bonuses_used > 0) {
         await rpcIncrementBonus(userId, -order.bonuses_used);
         await logBonus(userId, -order.bonuses_used, "Оплата заказа");
     }
+}
 
-    // 2. Cashback (2%)
+async function accrueBonuses(orderId: string) {
+    const { data: order } = await supabase.from("orders").select("*").eq("id", orderId).single();
+    if (!order) return;
+
+    const userId = order.user_id;
+
+    // 1. Cashback (2%)
     const cashback = Math.floor(order.total * 0.02);
     if (cashback > 0) {
         await rpcIncrementBonus(userId, cashback);
-        await logBonus(userId, cashback, "Кэшбэк");
+        await logBonus(userId, cashback, `Кэшбэк (Заказ #${orderId})`);
     }
 
-    // 3. Referrer Cashback (1%)
-    if (referrerId) {
+    // 2. Referrer (1%)
+    const { data: client } = await supabase.from("clients").select("referrer_id").eq("user_id", userId).single();
+    if (client && client.referrer_id) {
         const refCashback = Math.floor(order.total * 0.01);
         if (refCashback > 0) {
-            await rpcIncrementBonus(referrerId, refCashback);
-            await logBonus(referrerId, refCashback, "Реф. кэшбэк");
+            await rpcIncrementBonus(client.referrer_id, refCashback);
+            await logBonus(client.referrer_id, refCashback, `Реф. кэшбэк (Друг: ${userId})`);
         }
+    }
+}
+
+async function refundBonuses(orderId: string) {
+    const { data: order } = await supabase.from("orders").select("user_id, bonuses_used").eq("id", orderId).single();
+    if (order && order.bonuses_used > 0) {
+        await rpcIncrementBonus(order.user_id, order.bonuses_used);
+        await logBonus(order.user_id, order.bonuses_used, `Возврат бонусов (Отмена #${orderId})`);
     }
 }
 
@@ -382,8 +532,10 @@ async function editMessageMarkup(chatId: number, msgId: number, markup: any) {
 
 // --- FORMATTING ---
 function formatTelegramMessage(order: OrderData, id: number, stats: any, discountLabel: string) {
+    const userDisplay = order.customer.username ? `@${order.customer.username}` : "";
+
     return `🎉 *НОВЫЙ ЗАКАЗ #${id}*\n` +
-        `👤 *${order.customer.name}*\n` +
+        `👤 *${order.customer.name}* ${userDisplay ? `(${userDisplay})` : ""}\n` +
         `📞 ${order.customer.phone}\n` +
         `📍 ${order.customer.address}\n\n` +
         `🛒 *Товары:* \n` + order.items.map(i => `- ${i.name} (${i.quantity})`).join('\n') +
