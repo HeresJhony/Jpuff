@@ -290,16 +290,46 @@
     }
 }
 
+/* Shining Star Effect */
+.tree-star-glow {
+    position: absolute;
+    top: 13.5%;
+    /* Moved down to sit ON the star */
+    left: 49.5%;
+    /* Centered horizontally */
+    transform: translate(-50%, -50%);
+    width: 2px;
+    /* Tiny core */
+    height: 2px;
+    background: #fff;
+    /* Pure white core */
+    border-radius: 50%;
+    /* Soft diffuse glow layers - RUBY RED VERSION */
+    box-shadow:
+        0 0 10px 4px #ff9999,
+        /* Bright light red inner glow */
+        0 0 25px 10px #ff0000,
+        /* Deep red middle glow */
+        0 0 45px 20px rgba(180, 0, 0, 0.7);
+    /* Dark red outer haze */
+    animation: starPulse 1.5s infinite alternate ease-in-out;
+    z-index: 20;
+    mix-blend-mode: screen;
+    /* Blends nicely with dark background */
+    pointer-events: none;
+    opacity: 0.9;
+}
+
 @keyframes starPulse {
     0% {
         opacity: 0.6;
-        transform: translateX(-50%) scale(0.9);
-        box-shadow: 0 0 10px rgba(255, 0, 0, 0.3);
+        transform: translate(-50%, -50%) scale(0.9);
+        filter: brightness(1);
     }
 
     100% {
         opacity: 1;
-        transform: translateX(-50%) scale(1.4);
-        box-shadow: 0 0 30px rgba(255, 50, 0, 0.8);
+        transform: translate(-50%, -50%) scale(1.3);
+        filter: brightness(1.5) drop-shadow(0 0 8px #ff0000);
     }
 }

@@ -68,9 +68,10 @@ body::before {
 }
 
 /* Safe Area for pages without Header (Index, Profile, etc.) */
-body > .container:first-child,
-body > .profile-container:first-child {
-    padding-top: 60px !important;
+body>.container:first-child,
+body>.profile-container:first-child {
+    padding-top: 50px !important;
+    /* Slightly reduced for better alignment */
 }
 
 /* ========================================================= */
@@ -83,13 +84,15 @@ header {
     grid-template-columns: auto 1fr auto;
     align-items: center;
     padding: 20px 15px;
-    padding-top: 50px; /* Added top padding for status bar */
+    padding-top: 50px;
+    /* Added top padding for status bar */
     background: var(--bg-dark);
     position: relative;
     top: 0;
     z-index: 1000;
     height: auto;
-    min-height: 90px; /* Increased min-height */
+    min-height: 90px;
+    /* Increased min-height */
     box-sizing: border-box;
     gap: 10px;
     backdrop-filter: blur(5px);
@@ -193,7 +196,8 @@ button:hover,
     width: 520px;
     max-width: 90%;
     height: auto;
-    margin: 20px auto 20px auto; /* Fix: Removed negative top margin, added positive space */
+    margin: 5px auto 20px auto;
+    /* Reduced top margin to pull it up slightly */
 }
 
 .menu-buttons {
