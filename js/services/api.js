@@ -110,11 +110,13 @@ export async function fetchOrders(userId) {
 // ... (skip lines) ...
 
 export async function fetchClientData(userId) {
-    const url = `${CONFIG.ORDER_API_URL}?action=getClientData&user_id=${userId}&_t=${Date.now()}`;
+    // OPTIMIZATION: Use Direct DB Access (REST) instead of slow Edge Function for simple reads
+    const url = `${CONFIG.SUPABASE_URL}/rest/v1/clients?user_id=eq.${userId}&select=*`;
     try {
         const response = await fetch(url, { headers: API_HEADERS });
         if (!response.ok) throw new Error("Failed to fetch client data");
-        return await response.json();
+        const data = await response.json();
+        return data[0] || { bonus_balance: 0 };
     } catch (e) {
         console.error("Fetch client data error:", e);
         // Fallback to avoid breaking UI
