@@ -768,42 +768,49 @@ async function loadAvailableDiscounts() {
 }
 
 async function loadAvailableBonuses() {
-    // getUserId already imported
     const userId = getUserId();
     const availableEl = document.getElementById('available-bonuses');
     const bonusInput = document.getElementById('bonus-amount');
 
     const { getUserBonuses, syncBonuses } = await import('./services/bonus-system.js');
-    await syncBonuses(userId);
-    const availableBonuses = getUserBonuses(userId);
 
-    if (availableEl) availableEl.textContent = availableBonuses;
-    if (bonusInput) bonusInput.max = availableBonuses;
+    // Helper to update UI state
+    const updateUI = (val) => {
+        if (availableEl) availableEl.textContent = val;
+        if (bonusInput) bonusInput.max = val;
 
-    // Disable "Yes" option if 0 bonuses
-    const yesRadio = document.querySelector('input[name="use_bonuses"][value="yes"]');
-    const noRadio = document.querySelector('input[name="use_bonuses"][value="no"]');
+        const yesRadio = document.querySelector('input[name="use_bonuses"][value="yes"]');
+        const noRadio = document.querySelector('input[name="use_bonuses"][value="no"]');
 
-    if (yesRadio && availableBonuses === 0) {
-        yesRadio.disabled = true;
-        // Also style the parent label to look disabled if needed
-        yesRadio.parentElement.style.opacity = "0.5";
-        yesRadio.parentElement.style.cursor = "not-allowed";
+        if (yesRadio && val === 0) {
+            yesRadio.disabled = true;
+            yesRadio.parentElement.style.opacity = "0.5";
+            yesRadio.parentElement.style.cursor = "not-allowed";
 
-        // If it was checked, uncheck it and check 'no'
-        if (yesRadio.checked) {
-            yesRadio.checked = false;
-            if (noRadio) {
-                noRadio.checked = true;
-                // Trigger change event to hide the input
-                toggleBonusInput();
+            if (yesRadio.checked) {
+                yesRadio.checked = false;
+                if (noRadio) {
+                    noRadio.checked = true;
+                    toggleBonusInput();
+                }
             }
+        } else if (yesRadio) {
+            yesRadio.disabled = false;
+            yesRadio.parentElement.style.opacity = "1";
+            yesRadio.parentElement.style.cursor = "pointer";
         }
-    } else if (yesRadio) {
-        yesRadio.disabled = false;
-        yesRadio.parentElement.style.opacity = "1";
-        yesRadio.parentElement.style.cursor = "pointer";
-    }
+    };
+
+    // 1. Show Cache Immediately (Optimistic)
+    const cached = getUserBonuses(userId);
+    updateUI(cached);
+
+    // 2. Sync in Background
+    syncBonuses(userId).then(fresh => {
+        if (fresh !== cached) {
+            updateUI(fresh);
+        }
+    });
 }
 
 function updateOverallTotal() {
