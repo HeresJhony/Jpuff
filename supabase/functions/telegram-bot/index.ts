@@ -612,11 +612,23 @@ async function checkAndRegisterClient(customer: any) {
             const newBal = currentBal + 100;
 
             // 3. Update Client Record
-            await supabase.from("clients").update({
-                name: customer.name,
+            // 3. Update Client Record
+            const { error: updErr } = await supabase.from("clients").update({
+                name: customer.name || "Клиент",
                 bonus_balance: newBal,
                 total_orders: 1
             }).eq("id", existing.id);
+
+            if (updErr) {
+                console.error("GUEST CONVERSION ERROR (Update failed):", updErr);
+                // Fallback: Try generating bonus only, ignore name
+                const { error: retryErr } = await supabase.from("clients").update({
+                    bonus_balance: newBal,
+                    total_orders: 1
+                }).eq("id", existing.id);
+
+                if (retryErr) console.error("GUEST CONVERSION RETRY FAILED:", retryErr);
+            }
 
             await logBonus(userId, 100, "Welcome Bonus");
 
