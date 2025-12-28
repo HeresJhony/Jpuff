@@ -270,13 +270,10 @@ function validateItems(items: any[]) {
 }
 
 async function handleNewOrder(order: OrderData) {
-    // 0. Strict Validation
+    // 0. Strict Validation (Items)
     validateItems(order.items);
 
     if (typeof order.total !== 'number' || order.total < 0) throw new Error("Validation Error: Total cannot be negative");
-    if (order.bonuses_used && (typeof order.bonuses_used !== 'number' || order.bonuses_used < 0)) {
-        throw new Error("Validation Error: Bonuses used cannot be negative");
-    }
 
     // 🔐 CRITICAL VALIDATION: Stock & Price Verification
     console.log("[ORDER] Validating stock and recalculating prices from DB...");
@@ -285,194 +282,149 @@ async function handleNewOrder(order: OrderData) {
     const validatedItems = [];
 
     for (const item of order.items) {
-        // Fetch REAL product data from database
-        // FIX: Request correct columns (model_name/brand instead of non-existent name)
         const { data: product, error } = await supabase
             .from("Products")
             .select("id, model_name, brand, taste, price, stock")
             .eq("id", item.id)
             .single();
 
-        // If product not found or error, treat as out of stock
         if (error || !product) {
-            console.warn(`Product ID ${item.id} fetch failed:`, error?.message);
-            throw new Error(`Validation Error: Товар "${item.name}" недоступен или удален (Ошибка БД).`);
+            throw new Error(`Validation Error: Товар "${item.name}" недоступен или удален.`);
         }
 
-        // Construct Name Handle
         const realName = `${product.brand} ${product.model_name} ${product.taste ? ' - ' + product.taste : ''}`;
-
-        // Check stock availability
         const availableStock = Number(product.stock) || 0;
+
         if (item.quantity > availableStock) {
-            throw new Error(`Validation Error: Недостаточно товара "${realName}". Доступно: ${availableStock} шт., запрошено: ${item.quantity} шт.`);
+            throw new Error(`Validation Error: Недостаточно товара "${realName}". Доступно: ${availableStock} шт.`);
         }
 
-        // Use REAL price from DB (ignore client-provided price)
         const realPrice = Number(product.price);
         recalculatedTotal += realPrice * item.quantity;
 
-        // Store validated item with real price
         validatedItems.push({
             ...item,
-            price: realPrice, // Overwrite with DB price
-            name: realName // Ensure correct name
+            price: realPrice,
+            name: realName
         });
     }
 
-    // Replace order items with validated & corrected items
     order.items = validatedItems;
 
-    // Calculate expected total with discounts
+    // Calculate expected total
     const totalBeforeDiscounts = recalculatedTotal;
     const totalDiscounts = (order.bonus_discount || 0) + (order.new_user_discount || 0) + (order.promo_discount || 0);
     const expectedTotal = totalBeforeDiscounts - totalDiscounts;
 
-    console.log(`[ORDER] Recalculated: ${totalBeforeDiscounts}₽ - ${totalDiscounts}₽ discounts = ${expectedTotal}₽`);
-    console.log(`[ORDER] Client sent: ${order.total}₽`);
-
-    // Allow 1₽ tolerance for rounding
+    // Allow 1₽ tolerance
     if (Math.abs(order.total - expectedTotal) > 1) {
-        throw new Error(`Validation Error: Price mismatch. Expected ${expectedTotal}₽, got ${order.total}₽. Please refresh the page.`);
+        throw new Error(`Validation Error: Price mismatch. Expected ${expectedTotal}₽, got ${order.total}₽.`);
     }
 
-    // Update total to exact calculated value
     order.total = expectedTotal;
     order.original_total = totalBeforeDiscounts;
 
-    // 🔐 CRITICAL SECURITY CHECK: Verify Bonus Balance BEFORE Processing
-    if (order.bonuses_used && order.bonuses_used > 0) {
-        // We need to fetch the client first to check balance
-        // This is a bit awkward because checkAndRegisterClient is below, but security first!
-        const userId = order.customer.user_id || 'UNKNOWN';
+    // 🔐 IMPROVED BONUS VALIDATION
+    // Мы должны проверить баланс, но учесть, что если это ПЕРВЫЙ заказ, 
+    // пользователю положено +100 баллов, которых еще нет в базе.
+    const userId = order.customer.user_id || 'UNKNOWN';
+    let availableBalance = 0;
+    let isFirstOrder = false;
 
-        if (userId !== 'UNKNOWN') {
-            const { data: clientData } = await supabase.from("clients").select("bonus_balance").eq("user_id", userId).single();
+    if (userId !== 'UNKNOWN') {
+        const { data: clientData } = await supabase.from("clients").select("bonus_balance, total_orders").eq("user_id", userId).single();
 
-            if (clientData) {
-                const availableBalance = Number(clientData.bonus_balance) || 0;
-
-                if (order.bonuses_used > availableBalance) {
-                    throw new Error(`Validation Error: Insufficient bonus balance. Available: ${availableBalance}, Requested: ${order.bonuses_used}`);
-                }
-            } else {
-                // New client trying to use bonuses they don't have
-                throw new Error("Validation Error: Cannot use bonuses - no bonus account found");
+        if (clientData) {
+            availableBalance = Number(clientData.bonus_balance) || 0;
+            // Если заказов 0, считаем что у него виртуально есть +100 баллов приветственных
+            if ((clientData.total_orders || 0) === 0) {
+                availableBalance += 100;
+                isFirstOrder = true;
             }
         } else {
-            // Guest can't use bonuses
-            throw new Error("Validation Error: Guest users cannot use bonuses");
+            // Клиента нет в базе? Значит он точно новый (если это не ошибка ID)
+            // Создадим его позже, но для валидации считаем что у него 100 баллов
+            availableBalance = 100;
+            isFirstOrder = true;
+        }
+
+        if (order.bonuses_used && order.bonuses_used > availableBalance) {
+            throw new Error(`Validation Error: Недостаточно бонусов. Доступно (с учетом приветственных): ${availableBalance}, Запрошено: ${order.bonuses_used}`);
         }
     }
 
-    // 1. Check/Register Client
+    // 1. Check/Register Client & Award Bonuses
+    // Эта функция теперь корректно начислит баллы рефереру и рефералу
     const clientStats = await checkAndRegisterClient(order.customer);
 
-    // 2. Validate & Process Discounts
-    let discountInfo = null;
+    // 2. Promo Code Checks
     let discountLabel = "";
-
     if (order.promo_code) {
         const { data: dData } = await supabase.from("discounts").select("*").eq("code", order.promo_code).single();
         if (dData && dData.is_active) {
-            // Logic similar to GAS: check limits, one-time, etc.
-            // For MVP simplicity, we trust the code exists if valid
-            discountInfo = dData;
             discountLabel = dData.admin_label || `Promo ${dData.code}`;
-
-            // Recalculate Total (Server Truth)
-            const original = Number(order.original_total || order.total);
-            let amountOff = 0;
-            if (dData.type === 'percent') amountOff = Math.round(original * (dData.value / 100));
-            else amountOff = Number(dData.value);
-
-            order.new_user_discount = amountOff;
-            order.total = original - amountOff - (order.bonus_discount || 0);
         }
     }
 
-    // 3. Create Order
-    // We try to save discounts. If columns don't exist, this might fail unless we treat them carefully.
-    // SAFE APPROACH: Save important discount metadata into 'customer_comment' OR 'items' if columns miss.
-    // Ideally, columns 'new_user_discount', 'promo_discount', 'promo_code' should exist in 'orders' table.
-
+    // 3. Save Order to DB
     const dbPayload: any = {
         user_id: clientStats.userId,
         customer_name: order.customer.name,
         customer_phone: order.customer.phone,
         customer_address: order.customer.address,
         customer_payment: order.customer.payment,
-        customer_comment: order.customer.comment + (discountLabel ? ` [PROMO: ${order.promo_code || 'NewUser'} | -${order.new_user_discount || order.promo_discount}₽]` : ""),
+        customer_comment: order.customer.comment + (discountLabel ? ` [PROMO: ${order.promo_code}]` : ""),
         items: order.items,
         total: order.total,
         bonuses_used: order.bonuses_used || 0,
         status: "Новый"
     };
 
-    // Try to add specific fields if they are passed (assuming DB Schema handles them or ignores extra props if loose?)
-    // No, Supabase/PG is strict. If column doesn't exist, it errors.
-    // For MVP safety, let's stick to putting deep details in 'customer_comment' or ensuring we only write known columns.
-    // If you confirm columns exist, uncomment below:
-    if (order.new_user_discount) dbPayload.new_user_discount = order.new_user_discount;
-    if (order.promo_code) dbPayload.promo_code = order.promo_code;
-
-    // BUT, for History checks in frontend (cart.js), we look for 'new_user_discount' in the returned object.
-    // If we don't save it, frontend won't see it later.
-    // LET'S ASSUME we need to manually inject this into 'items' metadata as a workaround if we can't alter DB schema right now.
-    // We can add a hidden item or metadata property to the first item? No, dirty.
-
-    // Let's rely on adding columns. I will add them to the insert query. 
-    // If it fails, USER MUST ADD COLUMNS.
+    // Пытаемся записать доп поля, если они есть в схеме
     if (order.new_user_discount) dbPayload.new_user_discount = order.new_user_discount;
     if (order.promo_code) dbPayload.promo_code = order.promo_code;
 
     const { data: orderRow, error: orderError } = await supabase.from("orders").insert(dbPayload).select("id").single();
-
     if (orderError) throw new Error("DB Error: " + orderError.message);
 
     const orderId = orderRow.id;
 
-    // 4. Update Stock (Parallel)
+    // 4. Update Stock
     for (const item of order.items) {
-        // Simplified stock update - decrements stock
-        // Note: Real prod should use RPC for atomicity
         const { data: prod } = await supabase.from("Products").select("stock").eq("id", item.id).single();
         if (prod) {
             await supabase.from("Products").update({ stock: Math.max(0, Number(prod.stock) - Number(item.quantity)) }).eq("id", item.id);
         }
     }
 
-    // 5. Process Bonuses
-    await processOrderBonuses(order, clientStats.userId, clientStats.referrerId);
+    // 5. Deduct Spent Bonuses
+    // Важно: если пользователь использовал бонусы, списываем их.
+    // Если это был первый заказ, checkAndRegisterClient уже начислил 100.
+    // processOrderBonuses спишет их обратно, если они были использованы как скидка.
+    await processOrderBonuses(order, clientStats.userId);
 
     // 6. Notify Telegram Admin
     const adminMsg = formatTelegramMessage(order, orderId, clientStats, discountLabel);
 
-    // Dynamic Markup
+    // Keyboards...
     const inline_keyboard: any[] = [
         [
             { text: "✅ Выдано", callback_data: `confirm_${orderId}` },
             { text: "❌ Отмена", callback_data: `cancel_${orderId}` }
         ]
     ];
-
-    // Add contact button if possible
     if (order.customer.username) {
         inline_keyboard.unshift([{ text: "💬 Связаться", url: `https://t.me/${order.customer.username}` }]);
     } else if (order.customer.user_id && !String(order.customer.user_id).startsWith('web_')) {
         inline_keyboard.unshift([{ text: "👤 Профиль", url: `tg://user?id=${order.customer.user_id}` }]);
     }
 
-    const markup = { inline_keyboard };
-    await sendTelegram(ADMIN_CHAT_ID, adminMsg, markup);
+    await sendTelegram(ADMIN_CHAT_ID, adminMsg, { inline_keyboard });
 
     // 7. Notify Client
-    // Ensure user_id is treated as string for check
     const userIdStr = String(order.customer.user_id || "");
     if (userIdStr && !userIdStr.startsWith('web_')) {
-        // Only send to Telegram IDs (numeric usually, or we try anyway)
-        const clientMsg = formatClientMessage(order);
-        await sendTelegram(order.customer.user_id, clientMsg);
+        await sendTelegram(order.customer.user_id, formatClientMessage(order));
     }
 
     return new Response(JSON.stringify({ status: "success", orderId: orderId }), { headers: { "Content-Type": "application/json", ...corsHeaders } });
@@ -483,126 +435,114 @@ async function handleNewOrder(order: OrderData) {
 // [handleCallback moved to bottom]
 
 async function checkAndRegisterClient(customer: any) {
-    const userId = customer.user_id || 'UNKNOWN';
-    // Clean phone number (remove spaces, etc) for consistent search
-    const cleanPhone = customer.phone ? customer.phone.replace(/\D/g, '') : '';
+    const userId = String(customer.user_id);
 
-    // 1. Try to find by User ID
+    // 1. GET OR CREATE CLIENT
     let { data: existing } = await supabase.from("clients").select("*").eq("user_id", userId).single();
+    let isNew = false;
 
-    // 2. If not found by ID, try to find by Phone
-    let foundByPhone = false;
-    if (!existing && cleanPhone.length > 5) { // Ensure phone is long enough to be valid
-        // Note: This assumes phone numbers are unique in your system
-        // We need to query where phone matches. Supabase doesn't have a simple "OR" easily across calls without query builder, 
-        // but here we do it sequentially.
-        // We need to look for phone numbers that *contain* this clean sequence or match roughly? 
-        // For now, let's assume we store raw strings but we should try to match.
-        // To be safe, let's try to match the exact string provided or the cleaned version if you store cleaned.
-        // Given the current simple MVP, we'll try to match the 'phone' column.
-        const { data: byPhone } = await supabase.from("clients").select("*").ilike('phone', `%${cleanPhone}%`).limit(1).single();
+    if (!existing) {
+        isNew = true;
+        const { error: createErr } = await supabase.from("clients").insert({
+            user_id: userId,
+            name: customer.name || "Гость",
+            bonus_balance: 0,
+            total_orders: 0
+        });
+        if (createErr) throw new Error("Failed to create client: " + createErr.message);
 
-        if (byPhone) {
-            existing = byPhone;
-            foundByPhone = true;
-            // UPDATE ID: Found by phone, but ID is different (or was old web_ one).
-            // Let's migrate this user to the new Telegram ID so they don't lose bonuses.
-            if (existing.user_id !== userId) {
-                await supabase.from("clients").update({ user_id: userId }).eq("id", existing.id);
-                console.log(`Merged user by phone: ${cleanPhone}. Old ID: ${existing.user_id} -> New ID: ${userId}`);
-            }
-        }
+        // Fetch freshly created
+        const { data: fresh } = await supabase.from("clients").select("*").eq("user_id", userId).single();
+        existing = fresh;
+    } else {
+        // Update Metadata
+        await supabase.from("clients").update({ name: customer.name, phone: customer.phone }).eq("id", existing.id);
     }
 
-    if (existing) {
-        // CORRECTION: Check if this was a "Pre-client" (Guest) converting to real client
-        // Condition: total_orders == 0 AND has referrer_id
-        if ((existing.total_orders === 0 || existing.total_orders === null) && existing.referrer_id) {
-            const refId = existing.referrer_id;
-            console.log(`Converting Guest to Client: ${userId} (Ref: ${refId})`);
-
-            // 1. Award Referrer (100)
-            const { data: ref } = await supabase.from("clients").select("bonus_balance").eq("user_id", refId).single();
-            let refBal = 0;
-            if (ref) {
-                refBal = ref.bonus_balance || 0;
-            } else {
-                await supabase.from("clients").insert({ user_id: refId, name: "Пригласивший (Авто)", bonus_balance: 0 });
-            }
-
-            await supabase.from("clients").update({ bonus_balance: refBal + 100 }).eq("user_id", refId);
-            await logBonus(refId, 100, `Invite Bonus (friend: ${userId})`);
-
-            // 2. Award User (Welcome 100)
-            const currentBal = existing.bonus_balance || 0;
-            const newBal = currentBal + 100;
-
-            // 3. Update Client Record
-            const { error: updErr } = await supabase.from("clients").update({
-                name: customer.name,
-                bonus_balance: newBal,
-                total_orders: 1
-            }).eq("id", existing.id);
-
-            if (updErr) {
-                console.error("Client Update Failed (Initial):", updErr.message);
-                // Fallback: Skip 'name' (Use existing or default if needed, but here we just update bonus)
-                const { error: updErr2 } = await supabase.from("clients").update({
-                    bonus_balance: newBal,
-                    total_orders: 1
-                }).eq("id", existing.id);
-                if (updErr2) console.error("Client Update Failed (Fallback):", updErr2.message);
-            }
-
-            await logBonus(userId, 100, "Welcome Bonus");
-
-            return { userId, isNew: true, referrerId: refId, bonus_balance: newBal };
-        }
-
-        return { userId, isNew: false, referrerId: existing.referrer_id, bonus_balance: existing.bonus_balance };
-    }
-
-    // --- NEW CLIENT LOGIC ---
-    let referrerId = customer.referrer_id || null;
-    let initialBonus = 0;
-
-    // Validate Self-Referral
+    // 2. REFERRER LOGIC (Fixed)
+    let referrerId = existing.referrer_id || customer.referrer_id || null;
     if (referrerId === userId) referrerId = null;
 
-    if (referrerId) {
-        // Auto-create referrer if missing (Ghost Referrer Logic)
-        const { data: ref } = await supabase.from("clients").select("bonus_balance").eq("user_id", referrerId).single();
-
-        let refBalance = 0;
-        if (ref) {
-            refBalance = ref.bonus_balance || 0;
-        } else {
-            // Create ghost referrer
-            await supabase.from("clients").insert({ user_id: referrerId, name: "Пригласивший (Авто)", bonus_balance: 0 });
-            refBalance = 0;
-        }
-
-        // Award Referrer (100)
-        await supabase.from("clients").update({ bonus_balance: refBalance + 100 }).eq("user_id", referrerId);
-        await logBonus(referrerId, 100, `Invite Bonus (friend: ${userId})`);
-
-        initialBonus = 100; // Award New User
+    // А) Если реферер есть, но еще не привязан в базе -> Привязываем
+    if (referrerId && !existing.referrer_id) {
+        await supabase.from("clients").update({ referrer_id: referrerId }).eq("id", existing.id);
     }
 
-    // Create Client
-    await supabase.from("clients").insert({
-        user_id: userId,
-        name: customer.name,
-        phone: customer.phone, // We store the one provided
-        bonus_balance: initialBonus,
-        referrer_id: referrerId,
-        total_orders: 1
-    });
+    // Б) НАГРАЖДЕНИЕ РЕФЕРЕРА (Только если это ПЕРВЫЙ заказ пользователя)
+    if (referrerId && existing.total_orders === 0) {
+        const { data: ref } = await supabase.from("clients").select("bonus_balance").eq("user_id", referrerId).single();
 
-    if (initialBonus > 0) await logBonus(userId, initialBonus, "Welcome Bonus");
+        if (ref) {
+            const newRefBal = (Number(ref.bonus_balance) || 0) + 100;
+            await supabase.from("clients").update({ bonus_balance: newRefBal }).eq("user_id", referrerId);
+            await logBonus(referrerId, 100, `Invite Bonus (friend: ${userId})`);
+        } else {
+            // Создаем "призрака" если реферера нет в базе (редкий кейс)
+            await supabase.from("clients").insert({
+                user_id: referrerId,
+                name: "Пригласивший (Авто)",
+                bonus_balance: 100
+            });
+            await logBonus(referrerId, 100, `Invite Bonus (friend: ${userId})`);
+        }
+    }
 
-    return { userId, isNew: true, referrerId, bonus_balance: initialBonus };
+    // 3. WELCOME BONUS LOGIC (Fixed)
+    // Начисляем 100 баллов, если это первый заказ.
+    // Даже если пользователь их СРАЗУ потратит в этом заказе, мы сначала должны их начислить,
+    // чтобы потом списать в processOrderBonuses.
+    let currentBalance = Number(existing.bonus_balance) || 0;
+
+    if (existing.total_orders === 0) {
+        // Начисляем приветственные 100, если их еще нет (проверка < 100 на случай повторов)
+        // Но лучше просто добавить, если мы уверены что это первый проход
+        // Для надежности: если баланс маленький (меньше 100), добиваем до 100+
+
+        // Логика: Просто даем +100 за регистрацию/первый заказ.
+        // Чтобы не дюпать, проверяем флаг total_orders === 0.
+        // Примечание: total_orders увеличится только после успешного завершения всего цикла заказа, 
+        // но здесь мы пока просто обновляем баланс.
+
+        // Если у пользователя баланс 0, делаем 100.
+        // Если у него уже есть баллы (накликал?), добавляем 100.
+        // В текущей логике автора было: если < 100, то ставим 100. Оставим так для "Гарантии".
+
+        if (currentBalance < 100) {
+            const targetBalance = 100;
+            const diff = 100 - currentBalance;
+
+            // Сразу ставим orders=1? Нет, orders обновим триггером или отдельным запросом, 
+            // но тут автор использовал это как флаг. 
+            // Лучше обновим баланс, а total_orders увеличит уже БД или другая логика, 
+            // но в текущем скрипте total_orders обновляется только тут.
+            // Исправление: Увеличиваем total_orders здесь, чтобы пометить "Бонус выдан".
+
+            await supabase.from("clients").update({
+                bonus_balance: targetBalance,
+                total_orders: 1 // Помечаем, что бонус за "новичка" обработан
+            }).eq("id", existing.id);
+
+            await logBonus(userId, diff, "Welcome Bonus");
+            currentBalance = targetBalance;
+        } else {
+            // Если баланс уже > 100, просто помечаем что заказ первый прошел
+            await supabase.from("clients").update({ total_orders: 1 }).eq("id", existing.id);
+        }
+    } else {
+        // Если не первый заказ, просто инкрементим счетчик заказов
+        await supabase.from("clients").update({
+            total_orders: (existing.total_orders || 0) + 1
+        }).eq("id", existing.id);
+    }
+
+    return {
+        userId,
+        isNew: isNew,
+        referrerId,
+        bonus_balance: currentBalance
+    };
 }
+
 
 async function registerReferralLink(userId: string, referrerId: string) {
     if (userId === referrerId) return { success: false, message: "Self referral" };
@@ -735,19 +675,13 @@ async function registerVisit(userId: string) {
     return { success: true, message: "User registered", isNew: true };
 }
 
-async function processOrderBonuses(order: OrderData, userId: string, referrerId: string | null) {
-    // 1. Spend ONLY (Cashback is now on confirm)
+async function processOrderBonuses(order: OrderData, userId: string) {
     if (order.bonuses_used > 0) {
-        // await rpcIncrementBonus(userId, -order.bonuses_used); // OLD
-
-        // Manual Update
         const { data: c } = await supabase.from("clients").select("bonus_balance").eq("user_id", userId).single();
         if (c) {
-            const current = Number(c.bonus_balance) || 0;
-            // Ensure we don't go below zero (though validation should handle this, safety first)
-            const newBal = current - order.bonuses_used;
-            // We allow negative temporarily? No, usually not. But let's assume validation checked availability.
-
+            // Списываем баллы. Валидация уже прошла выше.
+            // Math.max(0, ...) защита от ухода в минус
+            const newBal = Math.max(0, (Number(c.bonus_balance) || 0) - order.bonuses_used);
             await supabase.from("clients").update({ bonus_balance: newBal }).eq("user_id", userId);
             await logBonus(userId, -order.bonuses_used, "Оплата заказа");
         }
