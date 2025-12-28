@@ -17,7 +17,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const userId = getUserId();
     console.log("Profile: User ID:", userId);
 
-    initUserProfile(tg);
+    initUserProfile();
 
     // Dynamic Promo Load
     const activeCode = getActivePromoCode();
@@ -96,11 +96,12 @@ window.refreshBonuses = async function () {
 /**
  * Initialize User Profile (Avatar & Name)
  */
-function initUserProfile(tg) {
+function initUserProfile() {
     const avatarImg = document.getElementById('profile-avatar');
     const nameDisplay = document.getElementById('profile-name');
 
-    // Get Telegram User Data
+    // Get Telegram User Data Safely
+    const tg = window.Telegram?.WebApp;
     const tgUser = tg?.initDataUnsafe?.user;
 
     // Avatar
@@ -181,8 +182,13 @@ function initUserProfile(tg) {
 
 
 /**
- * Show Promo Modal
+ * Close Promo Modal
  */
+window.closePromoModal = function (event) {
+    const modal = document.getElementById('promo-modal');
+    if (modal) modal.classList.remove('active');
+};
+
 /**
  * Show Promo Modal
  */
@@ -191,35 +197,56 @@ window.showPromoModal = async function () {
     const list = document.getElementById('promo-list');
     if (!modal || !list) return;
 
-    modal.style.display = 'flex';
+    modal.classList.add('active'); // Use CSS class for animation
     list.innerHTML = '<p style="color: #aaa; text-align: center;">Загрузка акций...</p>';
 
     const userId = getUserId();
     const promos = [];
 
     // 1. Check New Client Discount
-    try {
-        let isNewUser = false;
-        // Always fetch fresh status, do not rely on session cache for UI display
-        const history = await fetchOrders(userId);
-        if (Array.isArray(history) && history.length === 0) {
-            isNewUser = true;
-            sessionStorage.setItem('is_new_user_cached', 'true');
-        } else {
-            isNewUser = false;
-            sessionStorage.setItem('is_new_user_cached', 'false');
-        }
+    let isNewUser = true; // Default to TRUE (innocent until proven guilty is better for UX, or check cache)
 
-        promos.push({
-            icon: '🔥',
-            title: 'Скидка Нового Клиента',
-            desc: 'Скидка 10% на первый заказ.',
-            status: isNewUser ? 'Активна' : 'Использован',
-            statusColor: isNewUser ? '#00ff88' : '#ff4444'
-        });
+    // Check cache first for immediate feedback
+    const cached = sessionStorage.getItem('is_new_user_cached');
+    if (cached !== null) isNewUser = (cached === 'true');
+
+    try {
+        // Fetch fresh status
+        const history = await fetchOrders(userId);
+
+        if (Array.isArray(history)) {
+            let discountUsedBefore = false;
+
+            if (history.length > 0) {
+                for (const order of history) {
+                    // Ignore cancelled orders
+                    const status = (order.status || '').toLowerCase();
+                    if (status.includes('cancel') || status.includes('отмен')) continue;
+
+                    const discountVal = Number(order.new_user_discount || 0);
+                    const itemsStr = JSON.stringify(order.items || order.Items || []);
+
+                    if ((discountVal > 0) || (order.promo_code === 'new_client_10') || (itemsStr.includes('Скидка Нового Клиента'))) {
+                        discountUsedBefore = true;
+                        break;
+                    }
+                }
+            }
+            isNewUser = !discountUsedBefore;
+            sessionStorage.setItem('is_new_user_cached', String(isNewUser));
+        }
     } catch (e) {
-        console.error("Promo check error", e);
+        console.error("Promo check error, using cache/default", e);
     }
+
+    // ALWAYS PUSH THE PROMO CARD
+    promos.push({
+        icon: '🔥',
+        title: 'Скидка Нового Клиента',
+        desc: 'Скидка 10% на первый заказ.',
+        status: isNewUser ? 'Активна' : 'Использован',
+        statusColor: isNewUser ? '#00ff88' : '#ff4444'
+    });
 
     // 2. Bonus Program
     promos.push({

@@ -1,5 +1,5 @@
 // js/cart.js
-import { checkStock, submitOrder, fetchOrders, fetchDiscountInfo, fetchClientData } from './services/api.js';
+import { checkStock, submitOrder, fetchOrders, fetchDiscountInfo, fetchClientData } from './services/api.js?v=STOCK_FIX_003';
 import { getUserId, getActivePromoCode } from './services/user-id.js'; // IMPORTED
 import { showToast, showComingSoon, closeComingSoon } from './utils/ui.js';
 import { getCart, saveCart, clearCart } from './utils/cart-storage.js';
@@ -34,23 +34,44 @@ function initCheckoutPage() {
 }
 
 async function fillUserData(userId) {
-    try {
-        const data = await fetchClientData(userId);
-        if (data) {
-            const nameInput = document.getElementById('name');
-            const phoneInput = document.getElementById('phone');
+    // 1. Try Local Storage (Fastest & Most reliable for recent input)
+    const localName = localStorage.getItem('juicy_user_name');
+    const localPhone = localStorage.getItem('juicy_user_phone');
+    const localAddress = localStorage.getItem('juicy_user_address');
 
-            if (nameInput && data.name && data.name !== "Гость") {
-                nameInput.value = data.name;
+    if (localName) {
+        const nameInput = document.getElementById('name');
+        if (nameInput) nameInput.value = localName;
+    }
+    if (localPhone) {
+        const phoneInput = document.getElementById('phone');
+        if (phoneInput) phoneInput.value = localPhone;
+    }
+    if (localAddress) {
+        const addressInput = document.getElementById('address');
+        if (addressInput) addressInput.value = localAddress;
+    }
+
+    // 2. Try Server Data (Background update if local is missing)
+    if (!localName || !localPhone) {
+        try {
+            const data = await fetchClientData(userId);
+            if (data) {
+                const nameInput = document.getElementById('name');
+                const phoneInput = document.getElementById('phone');
+
+                if (nameInput && !nameInput.value && data.name && data.name !== "Гость") {
+                    nameInput.value = data.name;
+                    localStorage.setItem('juicy_user_name', data.name);
+                }
+                if (phoneInput && !phoneInput.value && data.phone) {
+                    phoneInput.value = data.phone;
+                    localStorage.setItem('juicy_user_phone', data.phone);
+                }
             }
-            if (phoneInput && data.phone) {
-                // If phone is stored without +7 or 8, maybe format? 
-                // Assumed stored as submitted.
-                phoneInput.value = data.phone;
-            }
+        } catch (e) {
+            console.error("Autofill failed", e);
         }
-    } catch (e) {
-        console.error("Autofill failed", e);
     }
 }
 
@@ -64,57 +85,93 @@ let cachedUserDiscountEligibility = null; // Memory cache
 let loadedPromoInfo = null; // Динамическая инфа о промокоде с сервера
 
 // Helper to reliably check eligibility with LocalStorage caching
-async function checkUserEligibility(userId, bypassCache = false) {
+// Helper to reliably check eligibility with LocalStorage caching (DISABLED CACHE)
+async function checkUserEligibility(userId, bypassCache = true) {
     if (userId === 'UNKNOWN' || !userId) return false;
 
-    // 1. Check Memory (fastest) - UNLESS bypassing
-    if (!bypassCache && cachedUserDiscountEligibility !== null) return cachedUserDiscountEligibility;
+    // CACHE DISABLED BY USER REQUEST
+    // if (!bypassCache && cachedUserDiscountEligibility !== null) return cachedUserDiscountEligibility;
 
-    // 2. Check LocalStorage (fast) - UNLESS bypassing
-    if (!bypassCache) {
-        const storedStatus = sessionStorage.getItem('is_new_user_cached');
-        if (storedStatus !== null) {
-            cachedUserDiscountEligibility = (storedStatus === 'true');
-            return cachedUserDiscountEligibility;
-        }
-    }
+    // if (!bypassCache) {
+    //    const storedStatus = sessionStorage.getItem('is_new_user_cached');
+    // ...
+    // }
 
-    // 3. Fetch from Network
+    // 3. Fetch from Network & Analyze History
     try {
+        console.log(`[CHECK] Fetching history for ${userId}...`);
         const history = await fetchOrders(userId);
-        console.log(`[CHECK] checkUserEligibility userId = ${userId}, historyLength = ${history?.length}, bypass = ${bypassCache} `);
 
-        if (Array.isArray(history) && history.length === 0) {
-            cachedUserDiscountEligibility = true;
-            sessionStorage.setItem('is_new_user_cached', 'true');
-            console.log("[CHECK] Status: NEW USER (0 orders)");
+        let discountUsedBefore = false;
+
+        if (Array.isArray(history) && history.length > 0) {
+            console.log(`[CHECK] Analyzing ${history.length} orders...`);
+
+            for (const order of history) {
+                // Ignore cancelled or failed orders clearly
+                const status = (order.status || '').toLowerCase();
+                if (status.includes('cancel') || status.includes('отмен') || status.includes('fail') || status.includes('ошиб')) {
+                    continue;
+                }
+
+                // Check for discount usage
+                // Be loose with types (Number/String)
+                const discountVal = Number(order.new_user_discount || 0);
+                const itemsStr = JSON.stringify(order.items || order.Items || '');
+
+                const hasNewUserDiscount = (discountVal > 0) ||
+                    (order.promo_code === 'new_client_10') ||
+                    (itemsStr.includes('Скидка Нового Клиента'));
+
+                if (hasNewUserDiscount) {
+                    console.warn(`[CHECK] ❌ Discount ALREADY USED in Order #${order.id}`, order);
+                    discountUsedBefore = true;
+                    // We don't break immediately in case we want to debug all, 
+                    // but logic-wise finding one valid usage is enough.
+                    break;
+                }
+            }
         } else {
-            cachedUserDiscountEligibility = false;
-            sessionStorage.setItem('is_new_user_cached', 'false');
+            console.log("[CHECK] History is empty. User is eligible.");
         }
-        return cachedUserDiscountEligibility;
+
+        // ELIGIBLE if NOT used before
+        const isEligible = !discountUsedBefore;
+
+        cachedUserDiscountEligibility = isEligible;
+        sessionStorage.setItem('is_new_user_cached', String(isEligible));
+
+        console.log(`[CHECK] Final Verdict: ${isEligible ? '✅ ELIGIBLE' : '⛔ NOT ELIGIBLE'}`);
+
+        return isEligible;
+
     } catch (e) {
-        console.error("Discount check failed", e);
-        return false; // Fail safe
+        console.error("[CHECK] Failed to verify eligibility, defaulting to ELIGIBLE (User friendly fallback)", e);
+        // Fallback: If network fails, allow usage. Server will double-check or we forgive.
+        return true;
     }
 }
 
 /**
  * Add product to cart with stock check
  */
-export async function addToCart(productOrId) {
+export async function addToCart(productOrId, qty = null) {
     let product = productOrId;
 
     // If passed ID (from some contexts), fetch full object
     if (typeof productOrId !== 'object') {
-        // Logic to fetch if needed, but usually we pass the object from the UI
-        // For now assume it's the product object or we handle finding it
-        // This might need refinement if called with just ID
         console.warn("addToCart called with ID not object, might fail if logic expects object");
     }
 
-    const qtyInput = document.getElementById('qty-input');
-    const quantity = qtyInput ? parseInt(qtyInput.value) : 1;
+    let quantity = 1;
+
+    if (qty !== null) {
+        quantity = Number(qty);
+    } else {
+        // Fallback to DOM element if no quantity passed (legacy behavior for product page)
+        const qtyInput = document.getElementById('qty-input');
+        quantity = qtyInput ? parseInt(qtyInput.value) : 1;
+    }
 
     const productId = Number(product.id);
     const cart = getCart();
@@ -138,7 +195,8 @@ export async function addToCart(productOrId) {
                 name: `${product.brand} ${product.model_name} ${product.taste ? ' - ' + product.taste : ''} `,
                 price: Number(product.price),
                 quantity: quantity,
-                image_url: product.image_url
+                image_url: product.image_url,
+                puffs: product.puffs // Save puffs info
             });
         }
 
@@ -251,16 +309,17 @@ export async function renderCart() {
             
             <div class="cart-item-info" style="flex: 1; margin-left: 15px;">
                 <h4 style="margin: 0 0 5px 0;">${item.name}</h4>
+                ${item.puffs ? `<div style="font-size: 0.85em; color: #aaa; margin-bottom: 5px;">♨️ ${item.puffs} затяжек</div>` : ''}
                 <div class="cart-item-price">${item.price} ₽</div>
             </div>
 
-            <div class="cart-item-actions" style="display: flex; align-items: center; gap: 10px;">
+            <div class="cart-item-actions" style="display: flex; flex-direction: row; align-items: center; gap: 15px;">
+                <div onclick="removeItem(${index})" style="color: #FF0000; cursor: pointer; font-size: 48px; padding: 5px; display: flex; align-items: center; justify-content: center; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">🗑</div>
                 <div class="cart-quantity">
                     <button onclick="updateQuantity(${index}, -1)">–</button>
                     <span>${item.quantity}</span>
                     <button onclick="updateQuantity(${index}, 1)">+</button>
                 </div>
-                <div onclick="removeItem(${index})" style="color: var(--neon-pink); cursor: pointer; padding: 5px;">🗑</div>
             </div>
         `;
         // Styling matches previous iteration
@@ -362,7 +421,7 @@ export async function submitOrderForm() {
 
             if (modal && listContainer) {
                 // Format the list of items nicely
-                const errorListHtml = outOfStockItems.map(i => `< div style = "margin-bottom: 5px;" >• ${i}</div > `).join('');
+                const errorListHtml = outOfStockItems.map(i => `<div style="margin-bottom: 5px;">• ${i}</div>`).join('');
                 listContainer.innerHTML = errorListHtml;
                 modal.style.display = 'flex'; // Uses flex centering from CSS
             } else {
@@ -485,10 +544,17 @@ export async function submitOrderForm() {
     };
 
     if (discountApplied > 0) {
-        orderPayload.new_user_discount = discountApplied; // This field name is misleading if it's not new user discount
-        // Add active promo code if selected
-        if (discountSelect && discountSelect.value !== 'new_client_10') {
-            orderPayload.promo_code = discountSelect.value; // e.g., 'traveler_10' or 'winter_15'
+        // CORRECT LOGIC: Only set new_user_discount if THAT SPECIFIC discount was used
+        if (discountSelect && discountSelect.value === 'new_client_10') {
+            orderPayload.new_user_discount = discountApplied;
+        } else {
+            // It's a promo code discount
+            orderPayload.promo_discount = discountApplied; // Use a different field
+            orderPayload.new_user_discount = 0; // Explicitly 0
+
+            if (discountSelect) {
+                orderPayload.promo_code = discountSelect.value;
+            }
         }
     }
 
@@ -529,6 +595,13 @@ export async function submitOrderForm() {
             // Deduct bonuses handled by server
             if (bonusesUsed > 0) {
                 console.log(`Server requested to deduct ${bonusesUsed} bonuses`);
+            }
+
+            // AUTO-SAVE USER DATA FOR FUTURE
+            localStorage.setItem('juicy_user_name', name);
+            localStorage.setItem('juicy_user_phone', phone);
+            if (address) {
+                localStorage.setItem('juicy_user_address', address);
             }
 
             // document.getElementById('checkout-form').style.display = 'none';
@@ -576,6 +649,8 @@ async function initializeDiscountAvailability() {
 
     // If we add more discounts later, add checking logic here
     const hasAnyDiscount = isNewUser || (loadedPromoInfo !== null);
+
+    console.log(`[DISCOUNT INIT] isNewUser: ${isNewUser}, Promo: ${!!loadedPromoInfo}, HasAny: ${hasAnyDiscount}`);
 
     const yesRadio = document.querySelector('input[name="use_discount"][value="yes"]');
     const noRadio = document.querySelector('input[name="use_discount"][value="no"]');

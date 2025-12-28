@@ -96,10 +96,43 @@ async function initProductDetails() {
             pageTitle.textContent = `${p.brand} ${p.model_name}`;
         }
 
+        // 🔒 Set max quantity based on stock
+        const qtyInput = document.getElementById('qty-input');
+        if (qtyInput) {
+            qtyInput.max = p.stock;
+            qtyInput.value = Math.min(1, p.stock); // If stock is 0, set to 0
+
+            // Disable if out of stock
+            if (p.stock <= 0) {
+                qtyInput.disabled = true;
+                qtyInput.value = 0;
+            }
+        }
+
         // Setup Add to Cart button
         const addBtn = document.getElementById('add-to-cart-btn');
         if (addBtn) {
-            addBtn.onclick = () => addToCart(p);
+            if (p.stock <= 0) {
+                addBtn.textContent = 'Нет в наличии';
+                addBtn.disabled = true;
+                addBtn.style.backgroundColor = '#666';
+            } else {
+                addBtn.onclick = () => {
+                    const qty = Number(qtyInput.value);
+                    // Validate quantity before adding
+                    if (qty > p.stock) {
+                        alert(`Доступно только ${p.stock} шт.`);
+                        qtyInput.value = p.stock;
+                        return;
+                    }
+                    if (qty < 1) {
+                        alert('Минимальное количество: 1');
+                        qtyInput.value = 1;
+                        return;
+                    }
+                    addToCart(p);
+                };
+            }
         }
 
     } catch (error) {

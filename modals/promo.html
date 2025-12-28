@@ -1,13 +1,17 @@
-<div id="promo-modal" class="modal-overlay">
-    <div class="modal-content promo-modal-content">
-        <h2 class="modal-title" style="color: var(--neon-blue);">Ваши Акции</h2>
+<div id="promo-modal" class="modal-overlay" onclick="closePromoModal(event)">
+    <div class="product-modal" onclick="event.stopPropagation()">
+        <div class="modal-shine"></div>
+        <div class="modal-scroll-container">
+            <button class="modal-close" onclick="closePromoModal()">×</button>
+            <h2 class="modal-title" style="margin-bottom: 20px; font-size: 1.5em; color: white;">Ваши Акции</h2>
 
-        <div id="promo-list" style="text-align: left; margin-bottom: 25px; min-height: 50px;">
-            <p style="color: #aaa; text-align: center;">Загрузка...</p>
+            <div id="promo-list" style="margin-bottom: 20px; min-height: 50px;">
+                <p style="color: #aaa; text-align: center;">Загрузка...</p>
+            </div>
+
+            <button onclick="closePromoModal()" class="modal-add-btn" style="width: 100%;">
+                ЗАКРЫТЬ
+            </button>
         </div>
-
-        <button onclick="document.getElementById('promo-modal').style.display='none'" class="promo-close-btn-styled">
-            Закрыть
-        </button>
     </div>
 </div>

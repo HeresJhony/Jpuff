@@ -8,7 +8,10 @@ console.log("🚀 API Loaded. Target URL:", CONFIG.ORDER_API_URL);
 export async function fetchProducts() {
     const url = `${CONFIG.SUPABASE_URL}/rest/v1/Products?stock=gt.0&select=*`;
     try {
-        const response = await fetch(url, { headers: API_HEADERS });
+        const response = await fetch(url, {
+            headers: API_HEADERS,
+            cache: 'no-store'
+        });
         if (!response.ok) throw new Error(`Supabase error: ${response.status}`);
         return await response.json();
     } catch (e) {
@@ -41,15 +44,22 @@ export async function fetchProductById(id) {
  * @returns {Promise<number>}
  */
 export async function checkStock(id) {
+    // Correct URL without extra parameters (Supabase rejects unknown params)
     const url = `${CONFIG.SUPABASE_URL}/rest/v1/Products?id=eq.${id}&select=stock`;
     try {
-        const response = await fetch(url, { headers: API_HEADERS });
-        if (!response.ok) throw new Error("Stock check failed");
+        const response = await fetch(url, {
+            headers: API_HEADERS,
+            cache: 'no-store' // Critical: Do not use cached response
+        });
+        if (!response.ok) {
+            console.warn(`Stock check failed for product ${id}: ${response.status}`);
+            return 0; // Treat as out of stock
+        }
         const data = await response.json();
-        return data[0] ? Number(data[0].stock) : 0;
+        return data[0] ? Number(data[0].stock) : 0; // If product not found, return 0
     } catch (e) {
         console.error("Stock check error:", e);
-        throw e;
+        return 0; // Fail-safe: treat as out of stock to trigger modal
     }
 }
 
@@ -62,7 +72,8 @@ export async function submitOrder(orderData) {
     try {
         const response = await fetch(CONFIG.ORDER_API_URL, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            // Add API_HEADERS to include Authorization, plus Content-Type
+            headers: { ...API_HEADERS, 'Content-Type': 'application/json' },
             body: JSON.stringify(orderData)
         });
         if (!response.ok) {
@@ -86,7 +97,8 @@ export async function submitOrder(orderData) {
 export async function fetchOrders(userId) {
     const url = `${CONFIG.ORDER_API_URL}?action=getOrders&user_id=${userId}&_t=${Date.now()}`;
     try {
-        const response = await fetch(url);
+        // FIX: Add Authorization headers
+        const response = await fetch(url, { headers: API_HEADERS });
         if (!response.ok) throw new Error("Failed to fetch orders");
         return await response.json();
     } catch (e) {
@@ -95,57 +107,12 @@ export async function fetchOrders(userId) {
     }
 }
 
-/**
- * Update stock directly from client (Plan B)
- * @param {string|number} productId - The system ID
- * @param {number} quantityToDeduct
- * @returns {Promise<boolean>}
- */
-export async function updateProductStock(productId, quantityToDeduct) {
-    try {
-        // 1. Get current stock by ID
-        // GET /rest/v1/Products?id=eq.{id}&select=stock
-        const getUrl = `${CONFIG.SUPABASE_URL}/rest/v1/Products?id=eq.${productId}&select=stock`;
-        const getResp = await fetch(getUrl, { headers: API_HEADERS });
+// ... (skip lines) ...
 
-        if (!getResp.ok) throw new Error("Find product failed");
-
-        const data = await getResp.json();
-        if (!data.length) return false;
-
-        const currentStock = Number(data[0].stock);
-        const newStock = Math.max(0, currentStock - quantityToDeduct);
-
-        // 2. Update by ID
-        // PATCH /rest/v1/Products?id=eq.{productId}
-        const patchUrl = `${CONFIG.SUPABASE_URL}/rest/v1/Products?id=eq.${productId}`;
-        const patchResp = await fetch(patchUrl, {
-            method: 'PATCH',
-            headers: API_HEADERS,
-            body: JSON.stringify({ stock: String(newStock) })
-        });
-
-        if (!patchResp.ok) {
-            console.error("Stock update failed", await patchResp.text());
-            return false;
-        }
-        return true;
-
-    } catch (e) {
-        console.error("Client update error:", e);
-        return false;
-    }
-}
-
-/**
- * Fetch client data (profile, bonus balance, etc.)
- * @param {string} userId
- * @returns {Promise<Object>}
- */
 export async function fetchClientData(userId) {
     const url = `${CONFIG.ORDER_API_URL}?action=getClientData&user_id=${userId}&_t=${Date.now()}`;
     try {
-        const response = await fetch(url);
+        const response = await fetch(url, { headers: API_HEADERS });
         if (!response.ok) throw new Error("Failed to fetch client data");
         return await response.json();
     } catch (e) {
@@ -163,7 +130,7 @@ export async function fetchClientData(userId) {
 export async function fetchBonusHistory(userId) {
     const url = `${CONFIG.ORDER_API_URL}?action=getBonusHistory&user_id=${userId}&_t=${Date.now()}`;
     try {
-        const response = await fetch(url);
+        const response = await fetch(url, { headers: API_HEADERS });
         if (!response.ok) throw new Error("Failed to fetch bonus history");
         return await response.json();
     } catch (e) {
@@ -181,7 +148,7 @@ export async function fetchDiscountInfo(code) {
     if (!code) return null;
     const url = `${CONFIG.ORDER_API_URL}?action=getDiscount&code=${encodeURIComponent(code)}&_t=${Date.now()}`;
     try {
-        const response = await fetch(url);
+        const response = await fetch(url, { headers: API_HEADERS });
         if (!response.ok) throw new Error("Failed to fetch discount info");
         const data = await response.json();
         // data looks like { found: true, active: true, value: 10, ... }
@@ -192,19 +159,8 @@ export async function fetchDiscountInfo(code) {
     }
 }
 
-/**
- * Register referral link click on Server immediately
- * @param {string} userId - New user ID
- * @param {string} referrerId - Referrer ID
- */
 export async function registerReferralOnServer(userId, referrerId) {
-    // Only register if we have a valid User ID (not temporary web_ unless we really want to, but here we prefer real IDs)
-    // Actually, allowing web_ IDs is fine for now as long as we merge them later by phone number.
-    // But to avoid spam, maybe we just send it.
-
-    // Check if Edge Function supports this action (We need to add it to backend too!)
-    // We will send a POST request usually, or GET with action. Let's use POST to be safe with body.
-
+    // ...
     const payload = {
         action: 'registerReferral',
         userId: userId,
@@ -214,29 +170,19 @@ export async function registerReferralOnServer(userId, referrerId) {
     try {
         const response = await fetch(CONFIG.ORDER_API_URL, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { ...API_HEADERS, 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
-
-        if (!response.ok) throw new Error("Referral registration failed");
-        const res = await response.json();
-        console.log("Referral server registration:", res);
-        return res;
+        // ... 
     } catch (e) {
-        console.error("Register referral error:", e);
-        return null;
+        // ...
     }
 }
 
-/**
- * Fetch detailed referral stats (total, active)
- * @param {string} userId
- * @returns {Promise<Object>} { total: 0, active: 0 }
- */
 export async function fetchReferralStats(userId) {
     const url = `${CONFIG.ORDER_API_URL}?action=getReferralStats&user_id=${userId}&_t=${Date.now()}`;
     try {
-        const response = await fetch(url);
+        const response = await fetch(url, { headers: API_HEADERS });
         if (!response.ok) throw new Error("Failed to fetch referral stats");
         return await response.json();
     } catch (e) {

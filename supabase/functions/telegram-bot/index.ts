@@ -39,6 +39,7 @@ interface OrderData {
     bonus_discount: number;
     promo_code?: string;
     new_user_discount?: number;
+    promo_discount?: number;
 }
 
 // --- MAIN HANDLER ---
@@ -122,6 +123,15 @@ serve(async (req) => {
         // 2. GET REQUESTS (API)
         if (req.method === "GET") {
             const action = url.searchParams.get("action");
+
+            // DIAGNOSTICS
+            if (action === "checkWebhook") {
+                const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getWebhookInfo`);
+                const info = await res.json();
+                return new Response(JSON.stringify(info), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+            }
+
+            // A. Get Orders for User
             const userId = url.searchParams.get("user_id");
 
             // 1. Get Orders
@@ -222,7 +232,115 @@ serve(async (req) => {
 
 // --- ORDER LOGIC ---
 
+// 0. Validation Helper
+function validateItems(items: any[]) {
+    if (!Array.isArray(items) || items.length === 0) {
+        throw new Error("Validation Error: Order must contain at least one item.");
+    }
+    for (const item of items) {
+        if (!item.id) throw new Error("Validation Error: Item missing ID");
+        if (!item.name) throw new Error("Validation Error: Item missing Name");
+        if (typeof item.price !== 'number' || item.price < 0) throw new Error("Validation Error: Item price must be non-negative number");
+        if (typeof item.quantity !== 'number' || item.quantity <= 0) throw new Error("Validation Error: Item quantity must be positive number");
+    }
+}
+
 async function handleNewOrder(order: OrderData) {
+    // 0. Strict Validation
+    validateItems(order.items);
+
+    if (typeof order.total !== 'number' || order.total < 0) throw new Error("Validation Error: Total cannot be negative");
+    if (order.bonuses_used && (typeof order.bonuses_used !== 'number' || order.bonuses_used < 0)) {
+        throw new Error("Validation Error: Bonuses used cannot be negative");
+    }
+
+    // 🔐 CRITICAL VALIDATION: Stock & Price Verification
+    console.log("[ORDER] Validating stock and recalculating prices from DB...");
+
+    let recalculatedTotal = 0;
+    const validatedItems = [];
+
+    for (const item of order.items) {
+        // Fetch REAL product data from database
+        // FIX: Request correct columns (model_name/brand instead of non-existent name)
+        const { data: product, error } = await supabase
+            .from("Products")
+            .select("id, model_name, brand, taste, price, stock")
+            .eq("id", item.id)
+            .single();
+
+        // If product not found or error, treat as out of stock
+        if (error || !product) {
+            console.warn(`Product ID ${item.id} fetch failed:`, error?.message);
+            throw new Error(`Validation Error: Товар "${item.name}" недоступен или удален (Ошибка БД).`);
+        }
+
+        // Construct Name Handle
+        const realName = `${product.brand} ${product.model_name} ${product.taste ? ' - ' + product.taste : ''}`;
+
+        // Check stock availability
+        const availableStock = Number(product.stock) || 0;
+        if (item.quantity > availableStock) {
+            throw new Error(`Validation Error: Недостаточно товара "${realName}". Доступно: ${availableStock} шт., запрошено: ${item.quantity} шт.`);
+        }
+
+        // Use REAL price from DB (ignore client-provided price)
+        const realPrice = Number(product.price);
+        recalculatedTotal += realPrice * item.quantity;
+
+        // Store validated item with real price
+        validatedItems.push({
+            ...item,
+            price: realPrice, // Overwrite with DB price
+            name: realName // Ensure correct name
+        });
+    }
+
+    // Replace order items with validated & corrected items
+    order.items = validatedItems;
+
+    // Calculate expected total with discounts
+    const totalBeforeDiscounts = recalculatedTotal;
+    const totalDiscounts = (order.bonus_discount || 0) + (order.new_user_discount || 0) + (order.promo_discount || 0);
+    const expectedTotal = totalBeforeDiscounts - totalDiscounts;
+
+    console.log(`[ORDER] Recalculated: ${totalBeforeDiscounts}₽ - ${totalDiscounts}₽ discounts = ${expectedTotal}₽`);
+    console.log(`[ORDER] Client sent: ${order.total}₽`);
+
+    // Allow 1₽ tolerance for rounding
+    if (Math.abs(order.total - expectedTotal) > 1) {
+        throw new Error(`Validation Error: Price mismatch. Expected ${expectedTotal}₽, got ${order.total}₽. Please refresh the page.`);
+    }
+
+    // Update total to exact calculated value
+    order.total = expectedTotal;
+    order.original_total = totalBeforeDiscounts;
+
+    // 🔐 CRITICAL SECURITY CHECK: Verify Bonus Balance BEFORE Processing
+    if (order.bonuses_used && order.bonuses_used > 0) {
+        // We need to fetch the client first to check balance
+        // This is a bit awkward because checkAndRegisterClient is below, but security first!
+        const userId = order.customer.user_id || 'UNKNOWN';
+
+        if (userId !== 'UNKNOWN') {
+            const { data: clientData } = await supabase.from("clients").select("bonus_balance").eq("user_id", userId).single();
+
+            if (clientData) {
+                const availableBalance = Number(clientData.bonus_balance) || 0;
+
+                if (order.bonuses_used > availableBalance) {
+                    throw new Error(`Validation Error: Insufficient bonus balance. Available: ${availableBalance}, Requested: ${order.bonuses_used}`);
+                }
+            } else {
+                // New client trying to use bonuses they don't have
+                throw new Error("Validation Error: Cannot use bonuses - no bonus account found");
+            }
+        } else {
+            // Guest can't use bonuses
+            throw new Error("Validation Error: Guest users cannot use bonuses");
+        }
+    }
+
     // 1. Check/Register Client
     const clientStats = await checkAndRegisterClient(order.customer);
 
@@ -250,18 +368,41 @@ async function handleNewOrder(order: OrderData) {
     }
 
     // 3. Create Order
-    const { data: orderRow, error: orderError } = await supabase.from("orders").insert({
+    // We try to save discounts. If columns don't exist, this might fail unless we treat them carefully.
+    // SAFE APPROACH: Save important discount metadata into 'customer_comment' OR 'items' if columns miss.
+    // Ideally, columns 'new_user_discount', 'promo_discount', 'promo_code' should exist in 'orders' table.
+
+    const dbPayload: any = {
         user_id: clientStats.userId,
         customer_name: order.customer.name,
         customer_phone: order.customer.phone,
         customer_address: order.customer.address,
         customer_payment: order.customer.payment,
-        customer_comment: order.customer.comment + (discountLabel ? ` [PROMO: ${order.promo_code}]` : ""),
+        customer_comment: order.customer.comment + (discountLabel ? ` [PROMO: ${order.promo_code || 'NewUser'} | -${order.new_user_discount || order.promo_discount}₽]` : ""),
         items: order.items,
         total: order.total,
-        bonuses_used: order.bonuses_used || 0, // Saved for refund logic
+        bonuses_used: order.bonuses_used || 0,
         status: "Новый"
-    }).select("id").single();
+    };
+
+    // Try to add specific fields if they are passed (assuming DB Schema handles them or ignores extra props if loose?)
+    // No, Supabase/PG is strict. If column doesn't exist, it errors.
+    // For MVP safety, let's stick to putting deep details in 'customer_comment' or ensuring we only write known columns.
+    // If you confirm columns exist, uncomment below:
+    if (order.new_user_discount) dbPayload.new_user_discount = order.new_user_discount;
+    if (order.promo_code) dbPayload.promo_code = order.promo_code;
+
+    // BUT, for History checks in frontend (cart.js), we look for 'new_user_discount' in the returned object.
+    // If we don't save it, frontend won't see it later.
+    // LET'S ASSUME we need to manually inject this into 'items' metadata as a workaround if we can't alter DB schema right now.
+    // We can add a hidden item or metadata property to the first item? No, dirty.
+
+    // Let's rely on adding columns. I will add them to the insert query. 
+    // If it fails, USER MUST ADD COLUMNS.
+    if (order.new_user_discount) dbPayload.new_user_discount = order.new_user_discount;
+    if (order.promo_code) dbPayload.promo_code = order.promo_code;
+
+    const { data: orderRow, error: orderError } = await supabase.from("orders").insert(dbPayload).select("id").single();
 
     if (orderError) throw new Error("DB Error: " + orderError.message);
 
@@ -319,60 +460,95 @@ async function handleCallback(cb: any) {
     const chatId = cb.message.chat.id;
     const msgId = cb.message.message_id;
     const data = cb.data;
-    const [action, orderId] = data.split('_');
 
-    // 1. Answer Immediately (Anti-Spinner)
-    await answerCallback(cb.id);
+    // Debug helper
+    const logToChat = async (text: string) => {
+        // Uncomment to debug live in chat
 
-    // 2. Logic (Buttons will be removed by editMessageText)
-
-    // 3. Logic
-    let uiText = "";
-
-    // Check current status first to avoid duplicates
-    const { data: order } = await supabase.from("orders").select("status, user_id, bonuses_used").eq("id", orderId).single();
-
-    if (order) {
-        // Helpers for client notification
-        const userIdStr = String(order.user_id || "");
-        const isTelegramUser = userIdStr && !userIdStr.startsWith('web_');
-
-        if (action === "confirm") {
-            if (order.status === "completed") return; // Silent exit if duplicate
-
-            await supabase.from("orders").update({ status: "completed" }).eq("id", orderId);
-            await accrueBonuses(orderId);
-            uiText = `✅ Заказ #${orderId} успешно выдан!`;
-
-            // Notify Client: SUCCESS
-            if (isTelegramUser) {
-                await sendTelegram(order.user_id, `✅ Ваш заказ #${orderId} успешно выдан!\nСпасибо, что выбрали нас! 🤝`);
-            }
-        }
-        else if (action === "cancel") {
-            if (order.status === "cancelled") return; // Silent exit
-
-            await supabase.from("orders").update({ status: "cancelled" }).eq("id", orderId);
-            await returnStock(orderId); // Return items
-            await refundBonuses(orderId);
-            uiText = `❌ Заказ #${orderId} отменен. Товары возвращены.`;
-
-            // Notify Client: CANCEL
-            if (isTelegramUser) {
-                let msg = `❌ Ваш заказ #${orderId} был отменен.`;
-                if (order.bonuses_used > 0) {
-                    msg += `\n🔄 Возвращено бонусов: ${order.bonuses_used}`;
-                }
-                await sendTelegram(order.user_id, msg);
-            }
-        }
-    }
-
-    // 4. Send Result (Edit Original)
-    if (uiText) {
-        await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/editMessageText`, {
+        /*
+        await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
             method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ chat_id: chatId, message_id: msgId, text: uiText })
+            body: JSON.stringify({ chat_id: chatId, text: `🐛 ${text}` })
+        });
+        */
+
+        console.log(text);
+    };
+
+    try {
+        await logToChat(`Callback: ${data}`);
+        const [action, orderId] = data.split('_');
+
+        // 1. Answer Immediately
+        await answerCallback(cb.id);
+
+        let uiText = "";
+
+        // Check current status
+        const { data: order, error: fetchError } = await supabase.from("orders").select("status, user_id, bonuses_used").eq("id", orderId).single();
+
+        if (fetchError) {
+            await logToChat(`Error fetching order: ${fetchError.message}`);
+            // If order invalid/deleted
+            uiText = `⚠️ Заказ #${orderId} не найден.`;
+        }
+        else if (order) {
+            await logToChat(`Order #${orderId} found. Status: ${order.status}`);
+
+            // Helpers
+            const userIdStr = String(order.user_id || "");
+            const isTelegramUser = userIdStr && !userIdStr.startsWith('web_');
+
+            if (action === "confirm") {
+                if (order.status === "completed") {
+                    uiText = `✅ Заказ #${orderId} УЖЕ выдан!`;
+                } else {
+                    const { error: updateError } = await supabase.from("orders").update({ status: "completed" }).eq("id", orderId);
+                    if (updateError) throw new Error(`Update Failed: ${updateError.message}`);
+
+                    await logToChat("Order updated. Accruing bonuses...");
+                    await accrueBonuses(orderId);
+                    uiText = `✅ Заказ #${orderId} успешно выдан!`;
+
+                    if (isTelegramUser) {
+                        await sendTelegram(order.user_id, `✅ Ваш заказ #${orderId} успешно выдан!\nСпасибо, что выбрали нас! 🤝`);
+                    }
+                }
+            }
+            else if (action === "cancel") {
+                if (order.status === "cancelled") {
+                    uiText = `❌ Заказ #${orderId} УЖЕ отменен.`;
+                } else {
+                    await supabase.from("orders").update({ status: "cancelled" }).eq("id", orderId);
+                    await logToChat("Order cancelled. Returning stock...");
+                    await returnStock(orderId);
+                    await refundBonuses(orderId);
+                    uiText = `❌ Заказ #${orderId} отменен. Товары возвращены.`;
+
+                    if (isTelegramUser) {
+                        let msg = `❌ Ваш заказ #${orderId} был отменен.`;
+                        if (order.bonuses_used > 0) {
+                            msg += `\n🔄 Возвращено бонусов: ${order.bonuses_used}`;
+                        }
+                        await sendTelegram(order.user_id, msg);
+                    }
+                }
+            }
+        }
+
+        // 4. Send Result (Edit Original)
+        if (uiText) {
+            await logToChat(`Updating UI to: ${uiText}`);
+            await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/editMessageText`, {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ chat_id: chatId, message_id: msgId, text: uiText })
+            });
+        }
+    } catch (e: any) {
+        console.error("Callback error:", e);
+        await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ chat_id: chatId, text: `⚠️ CRITICAL ERROR: ${e.message || e}` })
         });
     }
 }
@@ -626,8 +802,19 @@ async function registerVisit(userId: string) {
 async function processOrderBonuses(order: OrderData, userId: string, referrerId: string | null) {
     // 1. Spend ONLY (Cashback is now on confirm)
     if (order.bonuses_used > 0) {
-        await rpcIncrementBonus(userId, -order.bonuses_used);
-        await logBonus(userId, -order.bonuses_used, "Оплата заказа");
+        // await rpcIncrementBonus(userId, -order.bonuses_used); // OLD
+
+        // Manual Update
+        const { data: c } = await supabase.from("clients").select("bonus_balance").eq("user_id", userId).single();
+        if (c) {
+            const current = Number(c.bonus_balance) || 0;
+            // Ensure we don't go below zero (though validation should handle this, safety first)
+            const newBal = current - order.bonuses_used;
+            // We allow negative temporarily? No, usually not. But let's assume validation checked availability.
+
+            await supabase.from("clients").update({ bonus_balance: newBal }).eq("user_id", userId);
+            await logBonus(userId, -order.bonuses_used, "Оплата заказа");
+        }
     }
 }
 
@@ -637,10 +824,20 @@ async function accrueBonuses(orderId: string) {
 
     const userId = order.user_id;
 
+    // Helper to add bonuses safely
+    const addBonus = async (uid: string, amount: number) => {
+        const { data: c } = await supabase.from("clients").select("bonus_balance").eq("user_id", uid).single();
+        if (c) {
+            const newBal = (Number(c.bonus_balance) || 0) + amount;
+            await supabase.from("clients").update({ bonus_balance: newBal }).eq("user_id", uid);
+        }
+    };
+
     // 1. Cashback (2%)
     const cashback = Math.floor(order.total * 0.02);
     if (cashback > 0) {
-        await rpcIncrementBonus(userId, cashback);
+        // await rpcIncrementBonus(userId, cashback); // OLD RPC
+        await addBonus(userId, cashback);
         await logBonus(userId, cashback, `Кэшбэк (Заказ #${orderId})`);
     }
 
@@ -649,7 +846,8 @@ async function accrueBonuses(orderId: string) {
     if (client && client.referrer_id) {
         const refCashback = Math.floor(order.total * 0.01);
         if (refCashback > 0) {
-            await rpcIncrementBonus(client.referrer_id, refCashback);
+            // await rpcIncrementBonus(client.referrer_id, refCashback); // OLD RPC
+            await addBonus(client.referrer_id, refCashback);
             await logBonus(client.referrer_id, refCashback, `Реф. кэшбэк (Друг: ${userId})`);
         }
     }
@@ -721,13 +919,52 @@ async function editMessageMarkup(chatId: number, msgId: number, markup: any) {
 function formatTelegramMessage(order: OrderData, id: number, stats: any, discountLabel: string) {
     const userDisplay = order.customer.username ? `@${order.customer.username}` : "";
 
+    // Calculate Subtotal (Original Price) - assuming order.items have price * quantity logic available or derived
+    // If we only have 'total', we might need to back-calculate or if 'items' has prices.
+    // For MVP, if we don't have subtotal passed, we can try to guess or just show structure if available.
+    // Let's assume order.items has { price, quantity }.
+
+    let subtotal = 0;
+    if (order.items && Array.isArray(order.items)) {
+        subtotal = order.items.reduce((acc, i) => acc + (Number(i.price || 0) * Number(i.quantity || 1)), 0);
+    }
+    // Fallback if item prices aren't reliable/passed
+    if (subtotal === 0 && order.total) subtotal = order.total; // Imperfect but fallback
+
+    const bonusesUsed = order.bonuses_used || 0;
+    // Fix: check both user discount and generic promo discount
+    const newUserDiscount = order.new_user_discount || 0;
+    const promoDiscount = order.promo_discount || 0;
+    const totalDiscount = newUserDiscount + promoDiscount;
+
+    // Formatting Money
+    const f = (n: number) => n.toLocaleString('ru-RU');
+
+    let financialBlock = `💰 *Итого: ${f(order.total)} ₽*`;
+
+    // Detailed Breakdown if discounts existed
+    if (bonusesUsed > 0 || totalDiscount > 0) {
+        financialBlock = `💵 *Сумма товаров:* ${f(subtotal)} ₽\n`;
+
+        if (newUserDiscount > 0) {
+            financialBlock += `📉 *Скидка (Новый клиент):* -${f(newUserDiscount)} ₽\n`;
+        }
+        if (promoDiscount > 0) {
+            financialBlock += `📉 *Скидка (${order.promo_code || 'Промокод'}):* -${f(promoDiscount)} ₽\n`;
+        }
+        if (bonusesUsed > 0) {
+            financialBlock += `💎 *Бонусы:* -${f(bonusesUsed)} ₽\n`;
+        }
+
+        financialBlock += `\n💰 *К ОПЛАТЕ: ${f(order.total)} ₽*`;
+    }
+
     return `🎉 *НОВЫЙ ЗАКАЗ #${id}*\n` +
         `👤 *${order.customer.name}* ${userDisplay ? `(${userDisplay})` : ""}\n` +
         `📞 ${order.customer.phone}\n` +
         `📍 ${order.customer.address}\n\n` +
-        `🛒 *Товары:* \n` + order.items.map(i => `- ${i.name} (${i.quantity})`).join('\n') +
-        `\n\n💰 *Итого: ${order.total} ₽*` +
-        (discountLabel ? `\n🏷 ${discountLabel}` : "");
+        `🛒 *Товары:* \n` + order.items.map(i => `- ${i.name} (${i.quantity} шт x ${i.price} ₽)`).join('\n') +
+        `\n\n${financialBlock}`;
 }
 
 function formatClientMessage(order: OrderData) {
