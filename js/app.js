@@ -1,5 +1,5 @@
 // js/app.js
-import { fetchProducts } from './services/api.js';
+import { fetchProducts, registerVisitOnServer } from './services/api.js';
 import { setupFilters, applyFilters } from './utils/filters.js?v=FINAL_ORDERS_FIX_017';
 import { showToast, showComingSoon, closeComingSoon } from './utils/ui.js';
 
@@ -22,8 +22,15 @@ export async function initApp() {
             if (tg.requestFullscreen) {
                 tg.requestFullscreen();
             }
+
+            // Register Visit!
+            if (tg.initDataUnsafe?.user?.id) {
+                const userId = String(tg.initDataUnsafe.user.id);
+                // Fire and forget (don't await to not slow down UI)
+                registerVisitOnServer(userId).then(res => console.log("Init Visit Registered:", res));
+            }
         } catch (e) {
-            console.log("TG Styling Error:", e);
+            console.log("TG Handling Error:", e);
         }
     }
 
