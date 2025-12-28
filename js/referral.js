@@ -141,7 +141,7 @@ function initReferralSection(userId) {
     window.shareNative = async () => {
         const shareData = {
             title: 'Juicy Puff',
-            text: 'Присоединяйся к Juicy Puff! Вот моя реферальная ссылка:',
+            text: 'Залетай в Juicy Puff и забирай 100 бонусов! 🎁',
             url: refLink,
         };
 
