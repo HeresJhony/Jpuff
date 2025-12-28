@@ -28,16 +28,33 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 // --- NEW MODAL LOGIC ---
 window.openBonusHistoryModal = async function () {
-    const modal = document.getElementById('bonus-history-modal');
+    let modal = document.getElementById('bonus-history-modal');
+
+    // Lazy Load if not present
+    if (!modal) {
+        console.log("Modal not in DOM, loading now...");
+        await loadModal('bonus_history');
+        modal = document.getElementById('bonus-history-modal');
+    }
+
+    if (!modal) {
+        console.error("Failed to load bonus history modal.");
+        return;
+    }
+
     const container = document.getElementById('bonus-history-container');
     const userId = window.currentUserId || getUserId();
 
-    if (modal) modal.style.display = 'flex';
+    modal.style.display = 'flex';
 
     if (container) {
-        container.innerHTML = '<p style="text-align: center; padding: 20px;">Загрузка...</p>';
-        const history = await fetchBonusHistory(userId);
-        renderBonusHistory(history, container);
+        container.innerHTML = '<div class="loading-spinner"></div><p style="text-align: center; color: #888;">Загрузка истории...</p>';
+        try {
+            const history = await fetchBonusHistory(userId);
+            renderBonusHistory(history, container);
+        } catch (e) {
+            container.innerHTML = '<p style="text-align: center; color: red;">Ошибка сети</p>';
+        }
     }
 }
 
