@@ -1,5 +1,5 @@
 // js/app.js
-import { fetchProducts, registerVisitOnServer } from './services/api.js';
+import { fetchProducts } from './services/api.js';
 import { setupFilters, applyFilters } from './utils/filters.js?v=FINAL_ORDERS_FIX_017';
 import { showToast, showComingSoon, closeComingSoon } from './utils/ui.js';
 
@@ -12,26 +12,10 @@ let allProducts = [];
 export async function initApp() {
     const listContainer = document.getElementById('product-list');
 
-    // Initialize Telegram Web App
+    // Initialize Telegram Web App (UI handled by visitor_tracker.js)
     const tg = window.Telegram?.WebApp;
     if (tg) {
-        tg.expand();
-        try {
-            tg.setHeaderColor('#050510');
-            tg.setBackgroundColor('#050510');
-            if (tg.requestFullscreen) {
-                tg.requestFullscreen();
-            }
-
-            // Register Visit!
-            if (tg.initDataUnsafe?.user?.id) {
-                const userId = String(tg.initDataUnsafe.user.id);
-                // Fire and forget (don't await to not slow down UI)
-                registerVisitOnServer(userId).then(res => console.log("Init Visit Registered:", res));
-            }
-        } catch (e) {
-            console.log("TG Handling Error:", e);
-        }
+        // Just ensuring it's ready, logic is in tracker
     }
 
     if (!listContainer) return; // Not on catalog page
@@ -92,15 +76,20 @@ export function renderProducts(products) {
         return;
     }
 
+    // Optimization: Use DocumentFragment to batch DOM updates (1 reflow instead of N)
+    const fragment = document.createDocumentFragment();
+
     products.forEach(product => {
         const card = document.createElement('div');
         card.className = 'product-card';
-        card.onclick = () => window.location.href = `product_details.html?id=${product.id}`; // Changed to product.id
+        // Use event delegation or simple bind (keep simple for now)
+        card.onclick = () => window.location.href = `product_details.html?id=${product.id}`;
 
         const imgUrl = product.image_url ? product.image_url : 'img/vape_icon.png';
 
+        // Optimization: loading="lazy" for images
         card.innerHTML = `
-            <img src="${imgUrl}" class="product-image" onerror="this.src='img/vape_icon.png'">
+            <img src="${imgUrl}" class="product-image" loading="lazy" onerror="this.src='img/vape_icon.png'">
             <div class="product-info">
                 <h3>${product.model_name}</h3>
                 <p class="brand">${product.brand}</p>
@@ -111,6 +100,8 @@ export function renderProducts(products) {
                 </div>
             </div>
         `;
-        listContainer.appendChild(card);
+        fragment.appendChild(card);
     });
+
+    listContainer.appendChild(fragment);
 }

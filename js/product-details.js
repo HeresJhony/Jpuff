@@ -3,13 +3,11 @@
  * Only loads what's needed for displaying product information
  */
 
-import { fetchProductById, checkStock } from './services/api.js';
-import { showToast } from './utils/ui.js';
-import { getCart, saveCart } from './utils/cart-storage.js';
+import { fetchProductById } from './services/api.js';
+import { addToCart } from './cart.js';
 
-/**
- * Helper function to create detail row safely
- */
+// ... (helper functions remain)
+
 function createDetailRow(label, value, valueClass = '') {
     const row = document.createElement('div');
     row.className = 'detail-row';
@@ -113,71 +111,11 @@ async function initProductDetails() {
 /**
  * Add product to cart with stock validation
  */
-async function addToCart(product) {
-    const qtyInput = document.getElementById('qty-input');
-    const quantity = qtyInput ? parseInt(qtyInput.value) : 1;
 
-    if (quantity < 1) {
-        showToast('Укажите количество', 'error');
-        return;
-    }
-
-    const productId = Number(product.id);
-    const cart = getCart();
-    const existingItem = cart.find(item => Number(item.id) === productId);
-    const currentQuantity = existingItem ? existingItem.quantity : 0;
-
-    try {
-        const availableStock = await checkStock(productId);
-
-        if ((currentQuantity + quantity) > availableStock) {
-            showToast(`Ошибка: Доступно всего ${availableStock} шт.`, 'error');
-            return;
-        }
-
-        if (existingItem) {
-            existingItem.quantity += quantity;
-        } else {
-            cart.push({
-                id: productId,
-                name: `${product.brand} ${product.model_name}${product.taste ? ' - ' + product.taste : ''}`,
-                price: Number(product.price),
-                quantity: quantity,
-                image_url: product.image_url
-            });
-        }
-
-        saveCart(cart);
-        const newTotal = currentQuantity + quantity;
-        showToast(`Добавлено! В корзине: ${newTotal} шт.`, 'success');
-
-        // Optional: redirect after short delay
-        setTimeout(() => {
-            window.location.href = 'catalogue.html';
-        }, 1000);
-
-    } catch (error) {
-        console.error('Stock check failed:', error);
-        showToast('Ошибка проверки склада', 'error');
-    }
-}
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
-    // Telegram Web App Styling
-    const tg = window.Telegram?.WebApp;
-    if (tg) {
-        tg.expand();
-        try {
-            tg.setHeaderColor('#050510');
-            tg.setBackgroundColor('#050510');
-            if (tg.requestFullscreen) {
-                tg.requestFullscreen();
-            }
-        } catch (e) {
-            console.log("TG Styling Error:", e);
-        }
-    }
+    // TG UI handled by visitor_tracker.js
 
     initProductDetails();
 });

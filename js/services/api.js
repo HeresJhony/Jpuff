@@ -245,29 +245,4 @@ export async function fetchReferralStats(userId) {
     }
 }
 
-/**
- * Register simple visit on Server immediately (for new users without referral)
- * @param {string} userId
- */
-export async function registerVisitOnServer(userId) {
-    const payload = {
-        action: 'registerVisit',
-        userId: userId
-    };
 
-    try {
-        const response = await fetch(CONFIG.ORDER_API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-
-        if (!response.ok) throw new Error("Visit registration failed");
-        const res = await response.json();
-        console.log("Visit server registration:", res);
-        return res;
-    } catch (e) {
-        console.error("Register visit error:", e);
-        return null;
-    }
-}

@@ -12,19 +12,7 @@ const BOT_USERNAME = 'Jpuffbot';
 const REFERRAL_BASE_URL = `https://t.me/${BOT_USERNAME}/juicy?startapp=`;
 
 document.addEventListener('DOMContentLoaded', async () => {
-    const tg = window.Telegram?.WebApp;
-    if (tg) {
-        tg.expand();
-        try {
-            tg.setHeaderColor('#050510');
-            tg.setBackgroundColor('#050510');
-            if (tg.requestFullscreen) {
-                tg.requestFullscreen();
-            }
-        } catch (e) {
-            console.log("TG Styling Error:", e);
-        }
-    }
+    // TG UI handled by visitor_tracker.js
 
     const userId = getUserId();
     console.log("Referral Page: User ID:", userId);
@@ -209,7 +197,7 @@ function trackLinkShare(userId) {
     let stats = JSON.parse(localStorage.getItem(STATS_KEY) || '{}');
     stats.linkClicks = (stats.linkClicks || 0) + 1;
     localStorage.setItem(STATS_KEY, JSON.stringify(stats));
-    loadLocalClicks(userId);
+    localStorage.setItem(STATS_KEY, JSON.stringify(stats));
 }
 
 async function loadReferralStats(userId) {
@@ -255,6 +243,4 @@ async function loadReferralStats(userId) {
 }
 
 // Old function kept for safety but unused
-function loadLocalClicks(userId) {
-    // Deprecated
-}
+

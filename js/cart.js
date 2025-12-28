@@ -237,14 +237,17 @@ export async function renderCart() {
     cartContainer.innerHTML = '';
     let subtotal = 0;
 
+    const fragment = document.createDocumentFragment();
+
     cart.forEach((item, index) => {
         subtotal += item.price * item.quantity;
 
         const cartItem = document.createElement('div');
         cartItem.className = 'cart-card';
 
+        // Optimized image with lazy loading (not strictly critical for small cart, but good practice)
         cartItem.innerHTML = `
-    <img src="${item.image_url || 'img/vape_icon.png'}" class="cart-item-img" style="width: 60px; height: 60px; object-fit: cover; border-radius: 8px; border: 1px solid var(--neon-blue);">
+            <img src="${item.image_url || 'img/vape_icon.png'}" loading="lazy" class="cart-item-img" style="width: 60px; height: 60px; object-fit: cover; border-radius: 8px; border: 1px solid var(--neon-blue);">
             
             <div class="cart-item-info" style="flex: 1; margin-left: 15px;">
                 <h4 style="margin: 0 0 5px 0;">${item.name}</h4>
@@ -259,7 +262,7 @@ export async function renderCart() {
                 </div>
                 <div onclick="removeItem(${index})" style="color: var(--neon-pink); cursor: pointer; padding: 5px;">🗑</div>
             </div>
-`;
+        `;
         // Styling matches previous iteration
         cartItem.style.display = 'flex';
         cartItem.style.alignItems = 'center';
@@ -269,8 +272,10 @@ export async function renderCart() {
         cartItem.style.borderRadius = '10px';
         cartItem.style.border = '1px solid var(--neon-blue)';
 
-        cartContainer.appendChild(cartItem);
+        fragment.appendChild(cartItem);
     });
+
+    cartContainer.appendChild(fragment);
 
     // --- Price Display Logic (Simple Total) ---
     const summaryP = document.querySelector('.cart-summary p');

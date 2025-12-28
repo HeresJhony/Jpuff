@@ -1,16 +1,32 @@
-
 import { CONFIG } from './config.js?v=TRACKER';
+import { getUserId } from './services/user-id.js';
 
 (function () {
-    console.log("🕵️ Visitor Tracker Init");
+    console.log("🕵️ Visitor Tracker & TG Init");
     const tg = window.Telegram?.WebApp;
-    if (tg && tg.initDataUnsafe?.user?.id) {
-        const userId = String(tg.initDataUnsafe.user.id);
+
+    // 1. Initialize Telegram Web App UI
+    if (tg) {
+        try {
+            tg.expand();
+            tg.setHeaderColor('#050510');
+            tg.setBackgroundColor('#050510');
+            if (tg.requestFullscreen) {
+                tg.requestFullscreen();
+            }
+            tg.ready();
+            console.log("✅ TG UI Initialized");
+        } catch (e) {
+            console.warn("TG UI Init Error:", e);
+        }
+    }
+
+    // 2. Track Visit
+    const userId = getUserId();
+    if (userId && userId !== 'UNKNOWN') {
         const hasTracked = sessionStorage.getItem('visit_tracked');
 
-        // Track once per session to reduce load, OR track always if backend handles idempotency efficiently.
-        // Backend 'registerVisit' checks existing user, so it's safe to call multiple times but wasteful.
-        // Let's call it once per session reload.
+        // Track once per session
         if (!hasTracked) {
             console.log("🕵️ Tracking visit for:", userId);
 

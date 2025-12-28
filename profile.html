@@ -11,24 +11,7 @@
     <link rel="stylesheet" href="css/css_chunk_responsive.css?v=V_LATEST">
     <link rel="stylesheet" href="css/modals.css?v=V_LATEST">
     <script src="js/telegram-web-app.js"></script>
-    <script>
-        (function () {
-            const tg = window.Telegram?.WebApp;
-            if (tg) {
-                tg.expand();
-                try {
-                    tg.setHeaderColor('#050510');
-                    tg.setBackgroundColor('#050510');
-                    if (tg.requestFullscreen) {
-                        tg.requestFullscreen();
-                    }
-                    tg.ready();
-                } catch (e) {
-                    console.log("TG Styling Error:", e);
-                }
-            }
-        })();
-    </script>
+
 </head>
 
 <body>

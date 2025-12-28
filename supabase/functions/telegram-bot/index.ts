@@ -102,11 +102,17 @@ serve(async (req) => {
 
                 if (text && text.startsWith('/start')) {
                     const welcomeText = "Добро пожаловать в наш магазин. С основными правилами можете ознакомиться на странице «Важная информация», в которую можно перейти из главной страницы меню магазина.";
-                    await sendTelegram(chatId, welcomeText);
 
-                    // Register if not exists (Optional, but good for "appearing in system")
-                    // We can check and insert a basic record if we want, OR just rely on the message.
-                    // For now, just the message is requested.
+                    // 1. Try to register (idempotent)
+                    // If user is NEW, registerVisit sends the welcome message.
+                    // If user is OLD, registerVisit does nothing and returns isNew=false.
+                    const regResult = await registerVisit(String(chatId));
+
+                    // 2. If user is OLD (already in DB), but explicitly clicked /start, 
+                    // we should still send the welcome message as a response.
+                    if (!regResult.isNew) {
+                        await sendTelegram(chatId, welcomeText);
+                    }
                 }
 
                 return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });

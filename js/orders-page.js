@@ -2,19 +2,7 @@ import { fetchOrders, fetchBonusHistory } from './services/api.js?v=FINAL_ORDERS
 import { getUserId } from './services/user-id.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
-    const tg = window.Telegram?.WebApp;
-    if (tg) {
-        tg.expand();
-        try {
-            tg.setHeaderColor('#050510');
-            tg.setBackgroundColor('#050510');
-            if (tg.requestFullscreen) {
-                tg.requestFullscreen();
-            }
-        } catch (e) {
-            console.log("TG Styling Error:", e);
-        }
-    }
+    // TG UI handled by visitor_tracker.js
 
     const userId = getUserId();
     console.log("Orders Page: User ID:", userId);
