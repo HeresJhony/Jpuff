@@ -43,9 +43,17 @@ async function loadBonusPoints(userId) {
     const bonusElement = document.getElementById('bonus-amount');
     if (!bonusElement) return;
 
-    // Show loading state if empty
-    if (bonusElement.textContent === '0' || bonusElement.textContent === '') {
-        bonusElement.textContent = '...';
+    // 1. UX OPTIMIZATION: Show Cache Immediately
+    const BONUS_KEY = 'juicy_bonus_' + userId;
+    const cached = localStorage.getItem(BONUS_KEY);
+    if (cached) {
+        bonusElement.textContent = cached;
+        // Visual hint that it might update (optional, skipping to keep clean)
+    } else {
+        // Only show loader if no cache
+        if (bonusElement.textContent === '0' || bonusElement.textContent === '') {
+            bonusElement.textContent = '...';
+        }
     }
 
     try {
@@ -59,16 +67,13 @@ async function loadBonusPoints(userId) {
         // Update UI
         bonusElement.textContent = displayBonus;
 
-        // Update Local Cache (optional, for consistency across tabs)
-        const BONUS_KEY = 'juicy_bonus_' + userId;
+        // Update Local Cache
         localStorage.setItem(BONUS_KEY, String(displayBonus));
 
     } catch (e) {
         console.error("Failed to load profile bonuses", e);
-        // Fallback to cache
-        const BONUS_KEY = 'juicy_bonus_' + userId;
-        const cached = localStorage.getItem(BONUS_KEY);
-        bonusElement.textContent = cached || '0';
+        // If query failed and we didn't have cache shown (unlikely), show 0
+        if (!cached) bonusElement.textContent = '0';
     }
 }
 
