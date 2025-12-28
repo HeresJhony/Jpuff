@@ -54,9 +54,11 @@ serve(async (req) => {
 
         // 1. WEBHOOK FROM TELEGRAM / API POST
         if (req.method === "POST") {
-            // Robust Body Parsing (Handle both JSON and Text/Plain from legacy frontend)
+            // Robust Body Parsing
             let body;
             const rawBody = await req.text();
+            console.log("📥 Incoming Request Body:", rawBody.substring(0, 500)); // Log first 500 chars
+
             try {
                 body = JSON.parse(rawBody);
             } catch (e) {
@@ -64,9 +66,31 @@ serve(async (req) => {
                 return new Response(JSON.stringify({ error: "Invalid JSON body" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
             }
 
+            // DIAGNOSTIC ACTIONS
+            if (body.action === 'getWebhookInfo') {
+                try {
+                    const info = await telegramFetch("getWebhookInfo", {});
+                    return new Response(JSON.stringify(info), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+                } catch (e: any) {
+                    return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+                }
+            }
+            if (body.action === 'setWebhook') {
+                // Allow setting webhook via diagnosis tool
+                // Expects body.url
+                if (!body.url) return new Response(JSON.stringify({ error: "Missing url" }), { status: 400 });
+                try {
+                    const res = await telegramFetch("setWebhook", { url: body.url });
+                    return new Response(JSON.stringify(res), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+                } catch (e: any) {
+                    return new Response(JSON.stringify({ error: e.message }), { status: 500 });
+                }
+            }
+
             // Case A: Telegram Callback Query (Button Click)
             if (body.callback_query) {
-                await handleCallback(body.callback_query);
+                const res = await handleCallback(body.callback_query);
+                if (res instanceof Response) return res;
                 return new Response(JSON.stringify({ ok: true }), { headers: { "Content-Type": "application/json", ...corsHeaders } });
             }
 
@@ -456,105 +480,7 @@ async function handleNewOrder(order: OrderData) {
 
 // --- TELEGRAM CALLBACK LOGIC ---
 
-async function handleCallback(cb: any) {
-    const chatId = cb.message.chat.id;
-    const msgId = cb.message.message_id;
-    const data = cb.data;
-
-    // Debug helper
-    const logToChat = async (text: string) => {
-        // Uncomment to debug live in chat
-
-        /*
-        await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ chat_id: chatId, text: `🐛 ${text}` })
-        });
-        */
-
-        console.log(text);
-    };
-
-    try {
-        await logToChat(`Callback: ${data}`);
-        const [action, orderId] = data.split('_');
-
-        // 1. Answer Immediately
-        await answerCallback(cb.id);
-
-        let uiText = "";
-
-        // Check current status
-        const { data: order, error: fetchError } = await supabase.from("orders").select("status, user_id, bonuses_used").eq("id", orderId).single();
-
-        if (fetchError) {
-            await logToChat(`Error fetching order: ${fetchError.message}`);
-            // If order invalid/deleted
-            uiText = `⚠️ Заказ #${orderId} не найден.`;
-        }
-        else if (order) {
-            await logToChat(`Order #${orderId} found. Status: ${order.status}`);
-
-            // Helpers
-            const userIdStr = String(order.user_id || "");
-            const isTelegramUser = userIdStr && !userIdStr.startsWith('web_');
-
-            if (action === "confirm") {
-                if (order.status === "completed") {
-                    uiText = `✅ Заказ #${orderId} УЖЕ выдан!`;
-                } else {
-                    const { error: updateError } = await supabase.from("orders").update({ status: "completed" }).eq("id", orderId);
-                    if (updateError) throw new Error(`Update Failed: ${updateError.message}`);
-
-                    await logToChat("Order updated. Accruing bonuses...");
-                    await accrueBonuses(orderId);
-                    uiText = `✅ Заказ #${orderId} успешно выдан!`;
-
-                    if (isTelegramUser) {
-                        await sendTelegram(order.user_id, `✅ Ваш заказ #${orderId} успешно выдан!\nСпасибо, что выбрали нас! 🤝`);
-                    }
-                }
-            }
-            else if (action === "cancel") {
-                if (order.status === "cancelled") {
-                    uiText = `❌ Заказ #${orderId} УЖЕ отменен.`;
-                } else {
-                    await supabase.from("orders").update({ status: "cancelled" }).eq("id", orderId);
-                    await logToChat("Order cancelled. Returning stock...");
-                    await returnStock(orderId);
-                    await refundBonuses(orderId);
-                    uiText = `❌ Заказ #${orderId} отменен. Товары возвращены.`;
-
-                    if (isTelegramUser) {
-                        let msg = `❌ Ваш заказ #${orderId} был отменен.`;
-                        if (order.bonuses_used > 0) {
-                            msg += `\n🔄 Возвращено бонусов: ${order.bonuses_used}`;
-                        }
-                        await sendTelegram(order.user_id, msg);
-                    }
-                }
-            }
-        }
-
-        // 4. Send Result (Edit Original)
-        if (uiText) {
-            await logToChat(`Updating UI to: ${uiText}`);
-            await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/editMessageText`, {
-                method: "POST", headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ chat_id: chatId, message_id: msgId, text: uiText })
-            });
-        }
-    } catch (e: any) {
-        console.error("Callback error:", e);
-        await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ chat_id: chatId, text: `⚠️ CRITICAL ERROR: ${e.message || e}` })
-        });
-    }
-}
-
-
-// --- HELPERS ---
+// [handleCallback moved to bottom]
 
 async function checkAndRegisterClient(customer: any) {
     const userId = customer.user_id || 'UNKNOWN';
@@ -612,22 +538,20 @@ async function checkAndRegisterClient(customer: any) {
             const newBal = currentBal + 100;
 
             // 3. Update Client Record
-            // 3. Update Client Record
             const { error: updErr } = await supabase.from("clients").update({
-                name: customer.name || "Клиент",
+                name: customer.name,
                 bonus_balance: newBal,
                 total_orders: 1
             }).eq("id", existing.id);
 
             if (updErr) {
-                console.error("GUEST CONVERSION ERROR (Update failed):", updErr);
-                // Fallback: Try generating bonus only, ignore name
-                const { error: retryErr } = await supabase.from("clients").update({
+                console.error("Client Update Failed (Initial):", updErr.message);
+                // Fallback: Skip 'name' (Use existing or default if needed, but here we just update bonus)
+                const { error: updErr2 } = await supabase.from("clients").update({
                     bonus_balance: newBal,
                     total_orders: 1
                 }).eq("id", existing.id);
-
-                if (retryErr) console.error("GUEST CONVERSION RETRY FAILED:", retryErr);
+                if (updErr2) console.error("Client Update Failed (Fallback):", updErr2.message);
             }
 
             await logBonus(userId, 100, "Welcome Bonus");
@@ -914,10 +838,95 @@ async function sendMessage(chatId: string, text: string, replyTo: number) {
     });
 }
 
-async function answerCallback(id: string) {
-    await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/answerCallbackQuery`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ callback_query_id: id })
+// --- DEBUG WRAPPER FOR TELEGRAM API ---
+async function telegramFetch(method: string, body: any) {
+    if (!BOT_TOKEN) throw new Error("CRITICAL: BOT_TOKEN is missing in environment variables!");
+
+    const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/${method}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
     });
+    const data = await res.json();
+    if (!data.ok) {
+        console.error(`Telegram API Error (${method}):`, data.description);
+        throw new Error(`Telegram API Error: ${data.description}`);
+    }
+    return data;
+}
+
+async function answerCallback(id: string) {
+    await telegramFetch("answerCallbackQuery", { callback_query_id: id });
+}
+
+async function handleCallback(cb: any) {
+    const chatId = cb.message.chat.id;
+    const msgId = cb.message.message_id;
+    const data = cb.data;
+
+    try {
+        console.log(`Processing callback: ${data}`);
+
+        // 1. Answer Immediately (Throws if Token Invalid)
+        await answerCallback(cb.id);
+
+        const [action, orderId] = data.split('_');
+        let uiText = "";
+
+        const { data: order, error: fetchError } = await supabase.from("orders").select("status, user_id, bonuses_used").eq("id", orderId).single();
+
+        if (fetchError) {
+            uiText = `⚠️ Заказ #${orderId} не найден (DB Error).`;
+        } else if (order) {
+            console.log(`Order #${orderId} found. Status: ${order.status}`);
+
+            const userIdStr = String(order.user_id || "");
+            const isTelegramUser = userIdStr && !userIdStr.startsWith('web_');
+
+            if (action === "confirm") {
+                if (order.status === "completed") {
+                    uiText = `✅ Заказ #${orderId} УЖЕ выдан!`;
+                } else {
+                    const { error: updateError } = await supabase.from("orders").update({ status: "completed" }).eq("id", orderId);
+                    if (updateError) throw new Error(`Update Failed: ${updateError.message}`);
+
+                    await accrueBonuses(orderId);
+                    uiText = `✅ Заказ #${orderId} успешно выдан!`;
+
+                    if (isTelegramUser) {
+                        await sendTelegram(order.user_id, `✅ Ваш заказ #${orderId} успешно выдан!\nСпасибо, что выбрали нас! 🤝`);
+                    }
+                }
+            } else if (action === "cancel") {
+                if (order.status === "cancelled") {
+                    uiText = `❌ Заказ #${orderId} УЖЕ отменен.`;
+                } else {
+                    await supabase.from("orders").update({ status: "cancelled" }).eq("id", orderId);
+                    await returnStock(orderId);
+                    await refundBonuses(orderId);
+                    uiText = `❌ Заказ #${orderId} отменен. Товары возвращены.`;
+
+                    if (isTelegramUser) {
+                        let msg = `❌ Ваш заказ #${orderId} был отменен.`;
+                        if (order.bonuses_used > 0) {
+                            msg += `\n🔄 Возвращено бонусов: ${order.bonuses_used}`;
+                        }
+                        await sendTelegram(order.user_id, msg);
+                    }
+                }
+            }
+        }
+
+        // 4. Send Result (Edit Original)
+        if (uiText) {
+            await telegramFetch('editMessageText', { chat_id: chatId, message_id: msgId, text: uiText });
+        }
+
+    } catch (e: any) {
+        console.error("Callback handler failed:", e);
+        // RETURN ERROR RESPONSE so we can see it in ping_callback.js
+        return new Response(JSON.stringify({ ok: false, error: e.message }), { status: 500, headers: { "Content-Type": "application/json" } });
+    }
 }
 
 async function editMessageMarkup(chatId: number, msgId: number, markup: any) {
