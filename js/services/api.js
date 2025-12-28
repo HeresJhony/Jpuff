@@ -1,4 +1,4 @@
-import { CONFIG, API_HEADERS } from '../config.js?v=FINAL_ORDERS_FIX_017';
+import { CONFIG, API_HEADERS } from '../config.js?v=FIX_RELOAD_02';
 console.log("🚀 API Loaded. Target URL:", CONFIG.ORDER_API_URL);
 
 /**
@@ -110,32 +110,16 @@ export async function fetchOrders(userId) {
 // ... (skip lines) ...
 
 export async function fetchClientData(userId) {
-    // OPTIMIZATION: Use Direct DB Access (REST)
+    // OPTIMIZATION: Use Direct DB Access (REST) instead of slow Edge Function for simple reads
     const url = `${CONFIG.SUPABASE_URL}/rest/v1/clients?user_id=eq.${userId}&select=*`;
     try {
         const response = await fetch(url, { headers: API_HEADERS });
         if (!response.ok) throw new Error("Failed to fetch client data");
         const data = await response.json();
-
-        // Calculate Virtual Balance (Sync with Backend Logic)
-        const client = data[0] || {};
-        let balance = Number(client.bonus_balance) || 0;
-        const totalOrders = Number(client.total_orders) || 0;
-
-        // If this is a new user (0 orders), they have a virtual +100 Welcome Bonus
-        // Backend 'handleNewOrder' also checks this.
-        if (totalOrders === 0) {
-            balance += 100;
-        }
-
-        return {
-            ...client,
-            bonus_balance: balance,
-            total_orders: totalOrders
-        };
+        return data[0] || { bonus_balance: 0 };
     } catch (e) {
         console.error("Fetch client data error:", e);
-        // Fallback
+        // Fallback to avoid breaking UI
         return { bonus_balance: 0 };
     }
 }
