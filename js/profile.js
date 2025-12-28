@@ -128,6 +128,34 @@ function initUserProfile() {
 
     nameDisplay.textContent = userName;
 
+    // DEBUG: Show User ID
+    let idDisplay = document.getElementById('profile-user-id-debug');
+    if (!idDisplay) {
+        idDisplay = document.createElement('div');
+        idDisplay.id = 'profile-user-id-debug';
+        idDisplay.style.cssText = 'color: #555; font-size: 0.7em; margin-top: 5px; cursor: pointer; text-align: center;';
+        idDisplay.title = 'Нажмите чтобы скопировать и обновить';
+        idDisplay.onclick = async () => {
+            const uid = getUserId();
+            try {
+                await navigator.clipboard.writeText(uid);
+                showToast('ID скопирован');
+            } catch (e) {
+                // fallback
+                const t = document.createElement("textarea");
+                t.value = uid;
+                document.body.appendChild(t);
+                t.select();
+                document.execCommand("copy");
+                t.remove();
+                showToast('ID скопирован');
+            }
+            if (window.refreshBonuses) window.refreshBonuses();
+        };
+        nameDisplay.parentElement.appendChild(idDisplay);
+    }
+    idDisplay.textContent = `ID: ${getUserId()}`;
+
     // Expose edit functions
     window.editName = () => {
         const nameInput = document.getElementById('profile-name-input');
