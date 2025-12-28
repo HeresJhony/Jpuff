@@ -263,3 +263,29 @@ async function addModalToCart() {
         addBtn.textContent = originalText;
     }, 700);
 }
+
+// --- AUTO-REFRESH BONUSES ON FOCUS ---
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+        const userId = getUserId();
+        if (userId) {
+            console.log('App visible, refreshing bonuses...');
+            import('./services/bonus-system.js').then(module => {
+                module.syncBonuses(userId).then(bal => {
+                   const els = [
+                       document.getElementById('bonus-amount'),
+                       document.getElementById('available-bonuses'),
+                       document.getElementById('earned-bonuses')
+                   ];
+                   els.forEach(el => { 
+                       if(el) {
+                           el.textContent = bal;
+                           el.style.color = '#00ff88';
+                           setTimeout(() => el.style.color = '', 1000);
+                       }
+                   });
+                }).catch(err => console.error('Auto-refresh failed', err));
+            });
+        }
+    }
+});
