@@ -1,8 +1,58 @@
 // js/cart.js
-import { checkStock, submitOrder, fetchOrders, fetchDiscountInfo } from './services/api.js';
+import { checkStock, submitOrder, fetchOrders, fetchDiscountInfo, fetchClientData } from './services/api.js';
 import { getUserId, getActivePromoCode } from './services/user-id.js'; // IMPORTED
 import { showToast, showComingSoon, closeComingSoon } from './utils/ui.js';
 import { getCart, saveCart, clearCart } from './utils/cart-storage.js';
+
+// ... (existing code) ...
+
+function initCheckoutPage() {
+    const totalEl = document.getElementById('checkout-sum');
+    if (!totalEl) return;
+
+    const cart = getCart();
+    if (cart.length === 0) {
+        window.location.href = 'index.html'; // Redirect if empty
+        return;
+    }
+
+    const originalCartTotal = Math.round(cart.reduce((sum, item) => sum + (item.price * item.quantity), 0));
+
+    // Always show original total (discount applied internally only)
+    totalEl.textContent = `${originalCartTotal} ₽`;
+
+    // Load available bonuses and discounts immediately when page loads
+    const userId = getUserId();
+    if (userId) {
+        loadAvailableBonuses();
+        loadAvailableDiscounts();
+        initializeDiscountAvailability(); // Block "Yes" if no discount
+
+        // AUTOFILL USER DATA
+        fillUserData(userId);
+    }
+}
+
+async function fillUserData(userId) {
+    try {
+        const data = await fetchClientData(userId);
+        if (data) {
+            const nameInput = document.getElementById('name');
+            const phoneInput = document.getElementById('phone');
+
+            if (nameInput && data.name && data.name !== "Гость") {
+                nameInput.value = data.name;
+            }
+            if (phoneInput && data.phone) {
+                // If phone is stored without +7 or 8, maybe format? 
+                // Assumed stored as submitted.
+                phoneInput.value = data.phone;
+            }
+        }
+    } catch (e) {
+        console.error("Autofill failed", e);
+    }
+}
 
 // Expose necessary functions for HTML event handlers
 // getTelegramUserId REMOVED. Use getUserId() imported from services.
@@ -555,29 +605,7 @@ async function initializeDiscountAvailability() {
     }
 }
 
-function initCheckoutPage() {
-    const totalEl = document.getElementById('checkout-sum');
-    if (!totalEl) return;
 
-    const cart = getCart();
-    if (cart.length === 0) {
-        window.location.href = 'index.html'; // Redirect if empty
-        return;
-    }
-
-    const originalCartTotal = Math.round(cart.reduce((sum, item) => sum + (item.price * item.quantity), 0));
-
-    // Always show original total (discount applied internally only)
-    totalEl.textContent = `${originalCartTotal} ₽`;
-
-    // Load available bonuses and discounts immediately when page loads
-    const userId = getUserId();
-    if (userId) {
-        loadAvailableBonuses();
-        loadAvailableDiscounts();
-        initializeDiscountAvailability(); // Block "Yes" if no discount
-    }
-}
 
 function toggleBonusInput() {
     const useBonuses = document.querySelector('input[name="use_bonuses"]:checked')?.value;
