@@ -80,13 +80,35 @@ serve(async (req) => {
                 return new Response(JSON.stringify(res), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
             }
 
+            // Case B2: Simple Visit Registration (For users opening app without link)
+            if (body.action === 'registerVisit') {
+                const { userId } = body;
+                if (!userId) return new Response(JSON.stringify({ error: "Missing userId" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+                // Logic to ensure client exists
+                const res = await registerVisit(userId);
+                return new Response(JSON.stringify(res), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+            }
+
             if (body.customer && body.items) {
                 return await handleNewOrder(body as OrderData);
             }
 
             // Case C: Telegram Message (Commands like /start)
             if (body.message) {
-                // Optional: Handle commands
+                const msg = body.message;
+                const chatId = msg.chat.id;
+                const text = msg.text;
+
+                if (text && text.startsWith('/start')) {
+                    const welcomeText = "Добро пожаловать в наш магазин. С основными правилами можете ознакомиться на странице «Важная информация», в которую можно перейти из главной страницы меню магазина.";
+                    await sendTelegram(chatId, welcomeText);
+
+                    // Register if not exists (Optional, but good for "appearing in system")
+                    // We can check and insert a basic record if we want, OR just rely on the message.
+                    // For now, just the message is requested.
+                }
+
                 return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
             }
         }
@@ -385,6 +407,40 @@ async function checkAndRegisterClient(customer: any) {
     }
 
     if (existing) {
+        // CORRECTION: Check if this was a "Pre-client" (Guest) converting to real client
+        // Condition: total_orders == 0 AND has referrer_id
+        if ((existing.total_orders === 0 || existing.total_orders === null) && existing.referrer_id) {
+            const refId = existing.referrer_id;
+            console.log(`Converting Guest to Client: ${userId} (Ref: ${refId})`);
+
+            // 1. Award Referrer (100)
+            const { data: ref } = await supabase.from("clients").select("bonus_balance").eq("user_id", refId).single();
+            let refBal = 0;
+            if (ref) {
+                refBal = ref.bonus_balance || 0;
+            } else {
+                await supabase.from("clients").insert({ user_id: refId, name: "Пригласивший (Авто)", bonus_balance: 0 });
+            }
+
+            await supabase.from("clients").update({ bonus_balance: refBal + 100 }).eq("user_id", refId);
+            await logBonus(refId, 100, `Invite Bonus (friend: ${userId})`);
+
+            // 2. Award User (Welcome 100)
+            const currentBal = existing.bonus_balance || 0;
+            const newBal = currentBal + 100;
+
+            // 3. Update Client Record
+            await supabase.from("clients").update({
+                name: customer.name,
+                bonus_balance: newBal,
+                total_orders: 1
+            }).eq("id", existing.id);
+
+            await logBonus(userId, 100, "Welcome Bonus");
+
+            return { userId, isNew: true, referrerId: refId, bonus_balance: newBal };
+        }
+
         return { userId, isNew: false, referrerId: existing.referrer_id, bonus_balance: existing.bonus_balance };
     }
 
@@ -444,12 +500,13 @@ async function registerReferralLink(userId: string, referrerId: string) {
 
         if (ordersCount === 0) {
             // Allow overwrite!
+            // ... (Referrer update logic) ...
+
             // Check if it's the same referrer to avoid redundant updates
             if (existing.referrer_id !== referrerId) {
                 await supabase.from("clients").update({ referrer_id: referrerId }).eq("user_id", userId);
 
                 // Also create ghost referrer if needed
-                // (Logic duplicated from below, safe to run)
                 {
                     const { data: ref } = await supabase.from("clients").select("bonus_balance").eq("user_id", referrerId).single();
                     if (!ref) {
@@ -517,10 +574,47 @@ async function registerReferralLink(userId: string, referrerId: string) {
 
     if (error) return { success: false, message: error.message };
 
+    // Send Welcome Message to the new "Guest"
+    const welcomeText = "Добро пожаловать в наш магазин. С основными правилами можете ознакомиться на странице «Важная информация», в которую можно перейти из главной страницы меню магазина.";
+    // Ensure we don't crash if userId is not a telegram ID (though it should be for this flow)
+    const userIdStr = String(userId);
+    if (!userIdStr.startsWith('web_')) {
+        await sendTelegram(userIdStr, welcomeText);
+    }
+
     // IMPORTANT: We do NOT award money here. Only on order.
     // But we secured the link.
 
     return { success: true, message: "Referral linked" };
+}
+
+async function registerVisit(userId: string) {
+    // 1. Check if user already exists
+    const { data: existing } = await supabase.from("clients").select("*").eq("user_id", userId).single();
+
+    if (existing) {
+        return { success: true, message: "User exists", isNew: false };
+    }
+
+    // 2. Create new "Guest" user (No referrer)
+    const { error } = await supabase.from("clients").insert({
+        user_id: userId,
+        name: "Гость",
+        bonus_balance: 0,
+        referrer_id: null,
+        total_orders: 0
+    });
+
+    if (error) return { success: false, message: error.message };
+
+    // 3. Send Welcome Message (Since they are new!)
+    const welcomeText = "Добро пожаловать в наш магазин. С основными правилами можете ознакомиться на странице «Важная информация», в которую можно перейти из главной страницы меню магазина.";
+    const userIdStr = String(userId);
+    if (!userIdStr.startsWith('web_')) {
+        await sendTelegram(userIdStr, welcomeText);
+    }
+
+    return { success: true, message: "User registered", isNew: true };
 }
 
 async function processOrderBonuses(order: OrderData, userId: string, referrerId: string | null) {
