@@ -45,7 +45,17 @@ window.openBonusHistoryModal = async function () {
     const container = document.getElementById('bonus-history-container');
     const userId = window.currentUserId || getUserId();
 
-    modal.style.display = 'flex';
+    // Force visible styles directly to ensure it appears
+    modal.style.cssText = `
+        display: flex;
+        position: fixed;
+        top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0, 0, 0, 0.85);
+        z-index: 9999;
+        justify-content: center;
+        align-items: center;
+        backdrop-filter: blur(5px);
+    `;
 
     if (container) {
         container.innerHTML = '<div class="loading-spinner"></div><p style="text-align: center; color: #888;">Загрузка истории...</p>';
