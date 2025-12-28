@@ -64,11 +64,11 @@ async function loadBonusPoints(userId) {
             displayBonus = data.bonus_balance;
         }
 
-        // Update UI
+        // ОБЯЗАТЕЛЬНО: Сначала обновляем localStorage, потом UI
+        localStorage.setItem(BONUS_KEY, String(displayBonus));
         bonusElement.textContent = displayBonus;
 
-        // Update Local Cache
-        localStorage.setItem(BONUS_KEY, String(displayBonus));
+        console.log("Баланс синхронизирован с БД:", displayBonus);
 
     } catch (e) {
         console.error("Failed to load profile bonuses", e);
