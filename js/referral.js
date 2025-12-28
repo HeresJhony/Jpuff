@@ -139,18 +139,22 @@ function initReferralSection(userId) {
     };
 
     window.shareNative = async () => {
+        const shareData = {
+            title: 'Juicy Puff',
+            text: 'Присоединяйся к Juicy Puff! Вот моя реферальная ссылка:',
+            url: refLink,
+        };
+
         if (navigator.share) {
             try {
-                await navigator.share({
-                    title: 'Juicy Puff',
-                    text: 'Присоединяйся к Juicy Puff! Вот моя реферальная ссылка:',
-                    url: refLink,
-                });
+                await navigator.share(shareData);
                 trackLinkShare(userId);
             } catch (err) { console.log('Share cancelled or failed:', err); }
         } else {
-            window.copyReferralLink();
-            showToast('⚠️ Шаринг не поддерживается, ссылка скопирована.');
+            // Fallback: Telegram Share (Better than copy)
+            const tgUrl = `https://t.me/share/url?url=${encodeURIComponent(refLink)}&text=${encodeURIComponent(shareData.text)}`;
+            window.open(tgUrl, '_blank');
+            trackLinkShare(userId);
         }
     };
 }
