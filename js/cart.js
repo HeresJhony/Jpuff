@@ -743,6 +743,15 @@ async function loadAvailableDiscounts() {
         opt.value = 'new_client_10';
         opt.textContent = '🔥 Скидка Нового Клиента (-10%)';
         select.appendChild(opt);
+    } else {
+        // Show as disabled if used
+        const opt = document.createElement('option');
+        opt.value = 'new_client_10_used';
+        opt.disabled = true;
+        opt.textContent = '❌ Скидка Нового Клиента (Использована)';
+        // Optional: style it if browser allows (some mobile browsers ignore option styles)
+        opt.style.color = '#ff4444';
+        select.appendChild(opt);
     }
     // 2. Dynamic Promo (from DB)
     if (loadedPromoInfo) {
