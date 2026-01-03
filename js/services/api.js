@@ -6,7 +6,7 @@ console.log("🚀 API Loaded. Target URL:", CONFIG.ORDER_API_URL);
  * @returns {Promise<Array>}
  */
 export async function fetchProducts() {
-    const url = `${CONFIG.SUPABASE_URL}/rest/v1/Products?stock=gt.0&select=*`;
+    const url = `${CONFIG.SUPABASE_URL}/rest/v1/Products?stock=gt.0&select=*&order=id.asc`;
     try {
         const response = await fetch(url, {
             headers: API_HEADERS,

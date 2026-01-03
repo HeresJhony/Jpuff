@@ -27,6 +27,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 <a href="profile.html" class="sidebar-link ${window.location.pathname.endsWith('profile.html') ? 'active' : ''}">
                     <span class="sidebar-icon">👤</span> Профиль
                 </a>
+                <a href="reviews.html" class="sidebar-link ${window.location.pathname.endsWith('reviews.html') ? 'active' : ''}">
+                    <span class="sidebar-icon">⭐</span> Отзывы
+                </a>
                 <a href="promo.html" class="sidebar-link ${window.location.pathname.endsWith('promo.html') ? 'active' : ''}">
                     <span class="sidebar-icon">🎁</span> Акции
                 </a>

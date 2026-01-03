@@ -2777,4 +2777,7 @@ body {
         padding-bottom: 30px;
         /* Safe area */
     }
-}
+}  
+/* Reviews Button Style */  
+.menu-button:nth-child(6), .reviews-btn { border-color: #FFD700; border-left: 5px solid #FFD700; background-image: linear-gradient(90deg, rgba(255, 215, 0, 0.1), rgba(255, 215, 0, 0.3), rgba(255, 215, 0, 0.1)); color: #FFD700; }  
+.menu-button:nth-child(6)::before { animation-delay: 3.0s; } 

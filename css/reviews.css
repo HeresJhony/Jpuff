@@ -1,0 +1,237 @@
+/* REVIEWS PAGE STYLES */
+
+/* --- SEARCH BAR --- */
+.search-container {
+    position: relative;
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+}
+
+.search-input {
+    width: 0;
+    opacity: 0;
+    padding: 10px 15px;
+    border: 1px solid var(--neon-blue);
+    background: rgba(0, 0, 0, 0.8);
+    color: var(--text-main);
+    border-radius: 20px;
+    font-family: var(--font-body);
+    transition: all 0.4s ease;
+    position: absolute;
+    right: 40px;
+    z-index: 10;
+}
+
+.search-input.active {
+    width: 100%;
+    opacity: 1;
+    right: 0;
+}
+
+.search-trigger {
+    background: transparent;
+    border: none;
+    font-size: 1.5em;
+    cursor: pointer;
+    color: var(--neon-blue);
+    z-index: 11;
+    padding: 5px;
+    transition: transform 0.2s;
+}
+
+.search-trigger:hover {
+    transform: scale(1.1);
+    text-shadow: 0 0 10px var(--neon-blue);
+}
+
+/* --- REVIEWS LIST --- */
+.reviews-list {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    padding-bottom: 80px; /* Space for fixed button */
+}
+
+.review-card {
+    background: var(--bg-panel);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 15px;
+    position: relative;
+    overflow: hidden;
+    animation: fadeIn 0.5s ease-in-out;
+}
+
+.review-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+    background: var(--neon-pink);
+}
+
+.review-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.review-product-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.review-product-icon {
+    width: 40px;
+    height: 40px;
+    object-fit: contain;
+    filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.3));
+}
+
+.review-product-name {
+    font-family: var(--font-heading);
+    font-weight: bold;
+    color: var(--neon-blue);
+    font-size: 0.95em;
+}
+
+.review-rating {
+    color: #ffd700;
+    font-size: 1.1em;
+    white-space: nowrap;
+}
+
+.review-user {
+    font-size: 0.8em;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.review-comment {
+    color: var(--text-main);
+    font-size: 0.95em;
+    line-height: 1.5;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 10px;
+    border-radius: 8px;
+}
+
+.review-date {
+    font-size: 0.7em;
+    color: var(--text-dim);
+    text-align: right;
+    margin-top: 5px;
+}
+
+/* --- BOTTOM ACTION BUTTON --- */
+.write-review-btn-container {
+    position: fixed;
+    bottom: 20px;
+    left: 0;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    z-index: 90;
+    padding: 0 20px;
+    box-sizing: border-box;
+}
+
+.write-review-btn {
+    background: linear-gradient(90deg, var(--neon-pink), #ff0055);
+    color: white;
+    font-family: var(--font-heading);
+    border: none;
+    padding: 15px 30px;
+    font-size: 1.1em;
+    border-radius: 30px;
+    box-shadow: 0 0 15px var(--neon-pink);
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    width: 100%;
+    max-width: 400px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.write-review-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 25px var(--neon-pink);
+}
+
+/* --- MODAL STYLES --- */
+/* (Reusing existing modal structure but confirming specific styles) */
+.modal-review-content {
+    background: var(--bg-dark);
+    border: 1px solid var(--neon-blue);
+    box-shadow: 0 0 20px rgba(0, 243, 255, 0.3);
+    color: var(--text-main);
+    border-radius: 12px;
+}
+
+.product-select-container {
+    margin-bottom: 20px;
+}
+
+.product-select {
+    width: 100%;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--neon-blue);
+    color: white;
+    border-radius: 8px;
+    option {
+        background: var(--bg-dark);
+    }
+}
+
+.rating-input-container {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin: 20px 0;
+}
+
+.star-rating-input {
+    font-size: 2em;
+    cursor: pointer;
+    color: #444;
+    transition: color 0.2s;
+}
+
+.star-rating-input:hover,
+.star-rating-input.active {
+    color: #ffd700;
+    text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+}
+
+.comment-input {
+    width: 100%;
+    height: 100px;
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid var(--text-dim);
+    color: white;
+    padding: 10px;
+    border-radius: 8px;
+    resize: none;
+    font-family: var(--font-body);
+    box-sizing: border-box; /* Fix padding issue */
+}
+
+.comment-input:focus {
+    border-color: var(--neon-blue);
+    outline: none;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}

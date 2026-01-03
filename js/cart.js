@@ -252,13 +252,18 @@ export async function changeQuantity(productId, delta) {
 /**
  * Render Cart
  */
+// Render Cart
 export async function renderCart() {
+    console.log("Rendering cart...");
+    const cart = getCart();
+    console.log("Cart contents:", cart);
+
     const cartContainer = document.getElementById('cart-items');
     // const emptyCartMsg = document.getElementById('empty-cart-msg'); // Not used in HTML
     const cartFooter = document.querySelector('.fixed-footer');
     const totalSumEl = document.getElementById('total-sum');
 
-    const cart = getCart();
+
 
     // Update header counter
     const cartCountEl = document.querySelector('.cart-count');
@@ -298,7 +303,13 @@ export async function renderCart() {
     const fragment = document.createDocumentFragment();
 
     cart.forEach((item, index) => {
-        subtotal += item.price * item.quantity;
+        const price = Number(item.price) || 0;
+        const qty = Number(item.quantity) || 1;
+        subtotal += price * qty;
+
+        // Update item in case it was bad in storage
+        item.price = price;
+        item.quantity = qty;
 
         const cartItem = document.createElement('div');
         cartItem.className = 'cart-card';
@@ -935,14 +946,16 @@ function initCartModule() {
     }
 
     const path = window.location.pathname;
+    const cartContainer = document.getElementById('cart-items');
+    const checkoutForm = document.getElementById('checkout-form') || document.getElementById('name');
 
-    if (path.includes('cart.html')) {
-        console.log("Detected Cart Page. Rendering...");
+    if (path.includes('cart.html') || cartContainer) {
+        console.log("Detected Cart Page (by path or element). Rendering...");
         renderCart();
     }
 
-    if (path.includes('checkout.html')) {
-        console.log("Detected Checkout Page. Initializing...");
+    if (path.includes('checkout.html') || checkoutForm) {
+        console.log("Detected Checkout Page (by path or element). Initializing...");
         initCheckoutPage();
     }
 

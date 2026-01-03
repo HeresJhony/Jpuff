@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Juicy Puff | Отзывы</title>
+    <link rel="stylesheet" href="css/style.css?v=FIX_RELOAD_03">
+    <link rel="stylesheet" href="css/css_chunk_responsive.css?v=FIX_RELOAD_03">
+    <link rel="stylesheet" href="css/reviews.css?v=FIX_RELOAD_03">
+    <script src="js/telegram-web-app.js"></script>
+    <!-- Подключаем Supabase SDK через CDN (уже есть в package.json, но для надежности здесь) -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+</head>
+
+<body>
+
+    <!-- Header -->
+    <header>
+        <button class="back-btn" onclick="history.back()">⬅ Назад</button>
+        <h1>Отзывы</h1>
+        <div class="header-actions">
+            <!-- Placeholder for potential future actions -->
+        </div>
+    </header>
+
+    <div class="container">
+
+        <!-- Top Actions -->
+        <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+            <!-- Search Bar -->
+            <div class="search-container" style="flex-grow: 1; margin-bottom: 0;">
+                <input type="text" id="review-search-input" class="search-input" placeholder="Поиск по названию...">
+                <button id="review-search-trigger" class="search-trigger">🔍</button>
+            </div>
+
+            <button id="my-reviews-btn" class="back-btn"
+                style="height: 40px; border-color: var(--neon-pink); color: var(--neon-pink);">
+                👤 Мои отзывы
+            </button>
+        </div>
+
+        <!-- Reviews List -->
+        <div id="reviews-list" class="reviews-list">
+            <!-- Reviews will be loaded here dynamically -->
+            <div style="text-align: center; color: var(--text-dim); margin-top: 50px;">
+                Загрузка отзывов...
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Bottom "Write Review" Button -->
+    <div class="write-review-btn-container">
+        <button id="open-review-modal-btn" class="write-review-btn">✍️ Написать отзыв</button>
+    </div>
+
+    <!-- Write Review Modal -->
+    <div id="write-review-modal" class="modal">
+        <div class="modal-content modal-review-content">
+            <span class="close-button" id="close-review-modal">&times;</span>
+            <h2 style="text-align: center; color: var(--neon-blue); margin-top: 0;">Ваш отзыв</h2>
+
+            <form id="review-form">
+                <!-- Product Selector -->
+                <div class="product-select-container">
+                    <label for="review-product-select"
+                        style="display: block; margin-bottom: 5px; color: var(--text-dim);">Выберите товар из последнего
+                        заказа:</label>
+                    <select id="review-product-select" class="product-select" required>
+                        <option value="" disabled selected>Загрузка товаров...</option>
+                    </select>
+                </div>
+
+                <!-- Star Rating -->
+                <div class="rating-input-container">
+                    <span class="star-rating-input" data-value="1">★</span>
+                    <span class="star-rating-input" data-value="2">★</span>
+                    <span class="star-rating-input" data-value="3">★</span>
+                    <span class="star-rating-input" data-value="4">★</span>
+                    <span class="star-rating-input" data-value="5">★</span>
+                </div>
+                <input type="hidden" id="review-rating-value" name="rating" required>
+
+                <!-- Comment -->
+                <textarea id="review-comment" class="comment-input"
+                    placeholder="Напишите пару слов о товаре (от 50 символов)..." maxlength="500"></textarea>
+
+                <!-- Submit Button -->
+                <button type="submit" id="submit-review-btn" class="write-review-btn"
+                    style="margin-top: 20px;">Сохранить отзыв</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Success Modal -->
+    <div id="review-success-modal" class="modal">
+        <div class="modal-content"
+            style="text-align: center; border: 1px solid var(--neon-pink); box-shadow: 0 0 20px var(--neon-pink);">
+            <span class="close-button" id="close-success-modal">&times;</span>
+            <div style="font-size: 3em; margin-bottom: 10px;">🎉</div>
+            <h2 style="color: var(--neon-pink); margin-top: 0;">Спасибо!</h2>
+            <p id="review-success-text" style="font-size: 1.1em; color: white;">Отзыв опубликован.</p>
+            <button id="success-ok-btn" class="write-review-btn"
+                style="margin-top: 20px; width: 100%; box-shadow: none; border: 1px solid white;">OK</button>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script type="module" src="js/reviews.js?v=FIX_RELOAD_03"></script>
+
+</body>
+
+</html>
