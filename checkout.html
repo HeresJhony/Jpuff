@@ -27,29 +27,10 @@
             <label for="phone">Номер телефона (*)</label>
             <input type="tel" id="phone" placeholder="+7 999 123-45-67" value="+7 " required>
 
-            <!-- Delivery Method Selector -->
-            <label>Способ получения (*)</label>
-            <div class="radio-group">
-                <label class="radio-container">
-                    <input type="radio" name="delivery_type" value="pickup" checked>
-                    <span class="checkmark"></span>
-                    🏠 Самовывоз
-                </label>
-                <label class="radio-container">
-                    <input type="radio" name="delivery_type" value="delivery">
-                    <span class="checkmark"></span>
-                    🚗 Доставка
-                </label>
-            </div>
-
-            <!-- Address Field (Hidden by default for Pickup) -->
-            <div id="address-block" style="display: none; margin-top: 15px;">
-                <label for="address">Адрес доставки (*)</label>
-                <input type="text" id="address" placeholder="Улица, Дом, Подъезд">
-            </div>
-
-            <label for="comment">Комментарий к заказу (необязательно)</label>
-            <textarea id="comment" placeholder="Домофон, этаж и т.д."></textarea>
+            <!-- Delivery Method implicitly Pickup -->
+            <input type="hidden" name="delivery_type" value="pickup">
+            <!-- Comment default empty -->
+            <input type="hidden" id="comment" value="">
 
             <!-- Discount Selection Section -->
             <div class="discount-selection-section" style="margin-bottom: 25px;">
