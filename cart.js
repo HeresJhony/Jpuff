@@ -48,8 +48,7 @@ async function fillUserData(userId) {
         if (phoneInput) phoneInput.value = localPhone;
     }
     if (localAddress) {
-        const addressInput = document.getElementById('address');
-        if (addressInput) addressInput.value = localAddress;
+        // Address autofill removed
     }
 
     // 2. Try Server Data (Background update if local is missing)
@@ -378,7 +377,7 @@ export async function renderCart() {
 export async function submitOrderForm() {
     const name = document.getElementById('name').value.trim();
     const phone = document.getElementById('phone').value.trim();
-    const address = document.getElementById('address')?.value.trim() || '';
+    const address = ''; // Address removed completely by user request
     const comment = document.getElementById('comment').value.trim();
     const payment = document.getElementById('payment').value;
     const isAgeConfirmed = document.getElementById('age-confirm').checked;
@@ -608,9 +607,7 @@ export async function submitOrderForm() {
             // AUTO-SAVE USER DATA FOR FUTURE
             localStorage.setItem('juicy_user_name', name);
             localStorage.setItem('juicy_user_phone', phone);
-            if (address) {
-                localStorage.setItem('juicy_user_address', address);
-            }
+            // Address saving removed
 
             // document.getElementById('checkout-form').style.display = 'none';
             document.getElementById('success-modal').style.display = 'flex';
