@@ -89,7 +89,7 @@ window.openBonusHistoryModal = async function () {
             container.innerHTML = '';
             history.forEach(tx => {
                 const color = tx.amount > 0 ? '#00ff88' : '#ff4444';
-                const sign = tx.amount > 0 ? '+' : '';
+                const sign = tx.amount > 0 ? '+' : '-';
                 const date = new Date(tx.created_at).toLocaleDateString('ru-RU', {
                     day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
                 });
@@ -129,7 +129,7 @@ function renderBonusHistory(history, container) {
         `;
 
         const isPositive = tx.amount > 0;
-        const sign = isPositive ? '+' : '';
+        const sign = isPositive ? '+' : '-';
         const color = isPositive ? '#00ff88' : '#ff4444';
 
         const date = new Date(tx.created_at).toLocaleDateString('ru-RU', {
