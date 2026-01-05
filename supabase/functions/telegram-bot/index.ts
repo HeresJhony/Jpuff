@@ -370,7 +370,7 @@ function formatAdminMsg(order: any, id: string, total: number) {
     return `🎉 *НОВЫЙ ЗАКАЗ #${id}*\n` +
         `👤 ${order.customer.name}\n` +
         `📞 ${order.customer.phone}\n` +
-        `📍 ${order.customer.address}\n\n` +
+        (order.customer.address ? `📍 ${order.customer.address}\n\n` : '') +
         `🛒 *Товары:*\n${itemsList}` +
         `${extras}\n\n` +
         `💰 *Итого: ${total} ₽*`;
