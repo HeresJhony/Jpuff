@@ -1,27 +1,82 @@
 // js/cart.js
-import { checkStock, submitOrder, fetchProductById, updateProductStock, fetchOrders, fetchDiscountInfo } from './services/api.js?v=V_FIX_DESIGN_036';
+import { checkStock, submitOrder, fetchOrders, fetchDiscountInfo, fetchClientData } from './services/api.js?v=STOCK_FIX_003';
 import { getUserId, getActivePromoCode } from './services/user-id.js'; // IMPORTED
 import { showToast, showComingSoon, closeComingSoon } from './utils/ui.js';
+import { getCart, saveCart, clearCart } from './utils/cart-storage.js';
+
+// ... (existing code) ...
+
+function initCheckoutPage() {
+    const totalEl = document.getElementById('checkout-sum');
+    if (!totalEl) return;
+
+    const cart = getCart();
+    if (cart.length === 0) {
+        window.location.href = 'index.html'; // Redirect if empty
+        return;
+    }
+
+    const originalCartTotal = Math.round(cart.reduce((sum, item) => sum + (item.price * item.quantity), 0));
+
+    // Always show original total (discount applied internally only)
+    totalEl.textContent = `${originalCartTotal} ₽`;
+
+    // Load available bonuses and discounts immediately when page loads
+    const userId = getUserId();
+    if (userId) {
+        loadAvailableBonuses();
+        loadAvailableDiscounts();
+        initializeDiscountAvailability(); // Block "Yes" if no discount
+
+        // AUTOFILL USER DATA
+        fillUserData(userId);
+    }
+}
+
+async function fillUserData(userId) {
+    // 1. Try Local Storage (Fastest & Most reliable for recent input)
+    const localName = localStorage.getItem('juicy_user_name');
+    const localPhone = localStorage.getItem('juicy_user_phone');
+    const localAddress = localStorage.getItem('juicy_user_address');
+
+    if (localName) {
+        const nameInput = document.getElementById('name');
+        if (nameInput) nameInput.value = localName;
+    }
+    if (localPhone) {
+        const phoneInput = document.getElementById('phone');
+        if (phoneInput) phoneInput.value = localPhone;
+    }
+    if (localAddress) {
+        const addressInput = document.getElementById('address');
+        if (addressInput) addressInput.value = localAddress;
+    }
+
+    // 2. Try Server Data (Background update if local is missing)
+    if (!localName || !localPhone) {
+        try {
+            const data = await fetchClientData(userId);
+            if (data) {
+                const nameInput = document.getElementById('name');
+                const phoneInput = document.getElementById('phone');
+
+                if (nameInput && !nameInput.value && data.name && data.name !== "Гость") {
+                    nameInput.value = data.name;
+                    localStorage.setItem('juicy_user_name', data.name);
+                }
+                if (phoneInput && !phoneInput.value && data.phone) {
+                    phoneInput.value = data.phone;
+                    localStorage.setItem('juicy_user_phone', data.phone);
+                }
+            }
+        } catch (e) {
+            console.error("Autofill failed", e);
+        }
+    }
+}
 
 // Expose necessary functions for HTML event handlers
-window.changeQuantity = changeQuantity;
-window.submitOrderForm = submitOrderForm;
-window.addToCart = addToCart;
-window.toggleBonusInput = toggleBonusInput;
-window.toggleDiscountInput = toggleDiscountInput;
-window.updateBonusPayment = updateOverallTotal; // Alias for backward compat if needed, or just use updateOverallTotal
-window.updateOverallTotal = updateOverallTotal;
-// Also expose modal functions in case they are used in shared headers
-window.showComingSoon = showComingSoon;
-window.closeComingSoon = closeComingSoon;
-
-function getCart() {
-    return JSON.parse(localStorage.getItem('cart')) || [];
-}
-
-function saveCart(cart) {
-    localStorage.setItem('cart', JSON.stringify(cart));
-}
+// getTelegramUserId REMOVED. Use getUserId() imported from services.
 
 // getTelegramUserId REMOVED. Use getUserId() imported from services.
 
@@ -30,57 +85,93 @@ let cachedUserDiscountEligibility = null; // Memory cache
 let loadedPromoInfo = null; // Динамическая инфа о промокоде с сервера
 
 // Helper to reliably check eligibility with LocalStorage caching
-async function checkUserEligibility(userId, bypassCache = false) {
+// Helper to reliably check eligibility with LocalStorage caching (DISABLED CACHE)
+async function checkUserEligibility(userId, bypassCache = true) {
     if (userId === 'UNKNOWN' || !userId) return false;
 
-    // 1. Check Memory (fastest) - UNLESS bypassing
-    if (!bypassCache && cachedUserDiscountEligibility !== null) return cachedUserDiscountEligibility;
+    // CACHE DISABLED BY USER REQUEST
+    // if (!bypassCache && cachedUserDiscountEligibility !== null) return cachedUserDiscountEligibility;
 
-    // 2. Check LocalStorage (fast) - UNLESS bypassing
-    if (!bypassCache) {
-        const storedStatus = sessionStorage.getItem('is_new_user_cached');
-        if (storedStatus !== null) {
-            cachedUserDiscountEligibility = (storedStatus === 'true');
-            return cachedUserDiscountEligibility;
-        }
-    }
+    // if (!bypassCache) {
+    //    const storedStatus = sessionStorage.getItem('is_new_user_cached');
+    // ...
+    // }
 
-    // 3. Fetch from Network
+    // 3. Fetch from Network & Analyze History
     try {
+        console.log(`[CHECK] Fetching history for ${userId}...`);
         const history = await fetchOrders(userId);
-        console.log(`[CHECK] checkUserEligibility userId = ${userId}, historyLength = ${history?.length}, bypass = ${bypassCache} `);
 
-        if (Array.isArray(history) && history.length === 0) {
-            cachedUserDiscountEligibility = true;
-            sessionStorage.setItem('is_new_user_cached', 'true');
-            console.log("[CHECK] Status: NEW USER (0 orders)");
+        let discountUsedBefore = false;
+
+        if (Array.isArray(history) && history.length > 0) {
+            console.log(`[CHECK] Analyzing ${history.length} orders...`);
+
+            for (const order of history) {
+                // Ignore cancelled or failed orders clearly
+                const status = (order.status || '').toLowerCase();
+                if (status.includes('cancel') || status.includes('отмен') || status.includes('fail') || status.includes('ошиб')) {
+                    continue;
+                }
+
+                // Check for discount usage
+                // Be loose with types (Number/String)
+                const discountVal = Number(order.new_user_discount || 0);
+                const itemsStr = JSON.stringify(order.items || order.Items || '');
+
+                const hasNewUserDiscount = (discountVal > 0) ||
+                    (order.promo_code === 'new_client_10') ||
+                    (itemsStr.includes('Скидка Нового Клиента'));
+
+                if (hasNewUserDiscount) {
+                    console.warn(`[CHECK] ❌ Discount ALREADY USED in Order #${order.id}`, order);
+                    discountUsedBefore = true;
+                    // We don't break immediately in case we want to debug all, 
+                    // but logic-wise finding one valid usage is enough.
+                    break;
+                }
+            }
         } else {
-            cachedUserDiscountEligibility = false;
-            sessionStorage.setItem('is_new_user_cached', 'false');
+            console.log("[CHECK] History is empty. User is eligible.");
         }
-        return cachedUserDiscountEligibility;
+
+        // ELIGIBLE if NOT used before
+        const isEligible = !discountUsedBefore;
+
+        cachedUserDiscountEligibility = isEligible;
+        sessionStorage.setItem('is_new_user_cached', String(isEligible));
+
+        console.log(`[CHECK] Final Verdict: ${isEligible ? '✅ ELIGIBLE' : '⛔ NOT ELIGIBLE'}`);
+
+        return isEligible;
+
     } catch (e) {
-        console.error("Discount check failed", e);
-        return false; // Fail safe
+        console.error("[CHECK] Failed to verify eligibility, defaulting to ELIGIBLE (User friendly fallback)", e);
+        // Fallback: If network fails, allow usage. Server will double-check or we forgive.
+        return true;
     }
 }
 
 /**
  * Add product to cart with stock check
  */
-export async function addToCart(productOrId) {
+export async function addToCart(productOrId, qty = null) {
     let product = productOrId;
 
     // If passed ID (from some contexts), fetch full object
     if (typeof productOrId !== 'object') {
-        // Logic to fetch if needed, but usually we pass the object from the UI
-        // For now assume it's the product object or we handle finding it
-        // This might need refinement if called with just ID
         console.warn("addToCart called with ID not object, might fail if logic expects object");
     }
 
-    const qtyInput = document.getElementById('qty-input');
-    const quantity = qtyInput ? parseInt(qtyInput.value) : 1;
+    let quantity = 1;
+
+    if (qty !== null) {
+        quantity = Number(qty);
+    } else {
+        // Fallback to DOM element if no quantity passed (legacy behavior for product page)
+        const qtyInput = document.getElementById('qty-input');
+        quantity = qtyInput ? parseInt(qtyInput.value) : 1;
+    }
 
     const productId = Number(product.id);
     const cart = getCart();
@@ -104,7 +195,8 @@ export async function addToCart(productOrId) {
                 name: `${product.brand} ${product.model_name} ${product.taste ? ' - ' + product.taste : ''} `,
                 price: Number(product.price),
                 quantity: quantity,
-                image_url: product.image_url
+                image_url: product.image_url,
+                puffs: product.puffs // Save puffs info
             });
         }
 
@@ -160,13 +252,18 @@ export async function changeQuantity(productId, delta) {
 /**
  * Render Cart
  */
+// Render Cart
 export async function renderCart() {
+    console.log("Rendering cart...");
+    const cart = getCart();
+    console.log("Cart contents:", cart);
+
     const cartContainer = document.getElementById('cart-items');
     // const emptyCartMsg = document.getElementById('empty-cart-msg'); // Not used in HTML
     const cartFooter = document.querySelector('.fixed-footer');
     const totalSumEl = document.getElementById('total-sum');
 
-    const cart = getCart();
+
 
     // Update header counter
     const cartCountEl = document.querySelector('.cart-count');
@@ -203,29 +300,39 @@ export async function renderCart() {
     cartContainer.innerHTML = '';
     let subtotal = 0;
 
+    const fragment = document.createDocumentFragment();
+
     cart.forEach((item, index) => {
-        subtotal += item.price * item.quantity;
+        const price = Number(item.price) || 0;
+        const qty = Number(item.quantity) || 1;
+        subtotal += price * qty;
+
+        // Update item in case it was bad in storage
+        item.price = price;
+        item.quantity = qty;
 
         const cartItem = document.createElement('div');
         cartItem.className = 'cart-card';
 
+        // Optimized image with lazy loading (not strictly critical for small cart, but good practice)
         cartItem.innerHTML = `
-    <img src="${item.image_url || 'img/vape_icon.png'}" class="cart-item-img" style="width: 60px; height: 60px; object-fit: cover; border-radius: 8px; border: 1px solid var(--neon-blue);">
+            <img src="${item.image_url || 'img/vape_icon.png'}" loading="lazy" class="cart-item-img" style="width: 60px; height: 60px; object-fit: cover; border-radius: 8px; border: 1px solid var(--neon-blue);">
             
             <div class="cart-item-info" style="flex: 1; margin-left: 15px;">
                 <h4 style="margin: 0 0 5px 0;">${item.name}</h4>
+                ${item.puffs ? `<div style="font-size: 0.85em; color: #aaa; margin-bottom: 5px;">♨️ ${item.puffs} затяжек</div>` : ''}
                 <div class="cart-item-price">${item.price} ₽</div>
             </div>
 
-            <div class="cart-item-actions" style="display: flex; align-items: center; gap: 10px;">
+            <div class="cart-item-actions" style="display: flex; flex-direction: row; align-items: center; gap: 15px;">
+                <div onclick="removeItem(${index})" style="color: #FF0000; cursor: pointer; font-size: 48px; padding: 5px; display: flex; align-items: center; justify-content: center; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">🗑</div>
                 <div class="cart-quantity">
                     <button onclick="updateQuantity(${index}, -1)">–</button>
                     <span>${item.quantity}</span>
                     <button onclick="updateQuantity(${index}, 1)">+</button>
                 </div>
-                <div onclick="removeItem(${index})" style="color: var(--neon-pink); cursor: pointer; padding: 5px;">🗑</div>
             </div>
-`;
+        `;
         // Styling matches previous iteration
         cartItem.style.display = 'flex';
         cartItem.style.alignItems = 'center';
@@ -235,8 +342,10 @@ export async function renderCart() {
         cartItem.style.borderRadius = '10px';
         cartItem.style.border = '1px solid var(--neon-blue)';
 
-        cartContainer.appendChild(cartItem);
+        fragment.appendChild(cartItem);
     });
+
+    cartContainer.appendChild(fragment);
 
     // --- Price Display Logic (Simple Total) ---
     const summaryP = document.querySelector('.cart-summary p');
@@ -269,7 +378,7 @@ export async function renderCart() {
 export async function submitOrderForm() {
     const name = document.getElementById('name').value.trim();
     const phone = document.getElementById('phone').value.trim();
-    const address = document.getElementById('address').value.trim();
+    const address = document.getElementById('address')?.value.trim() || '';
     const comment = document.getElementById('comment').value.trim();
     const payment = document.getElementById('payment').value;
     const isAgeConfirmed = document.getElementById('age-confirm').checked;
@@ -277,11 +386,8 @@ export async function submitOrderForm() {
     // Get Delivery Method
     const deliveryType = document.querySelector('input[name="delivery_type"]:checked')?.value || 'pickup';
 
-    // Validate Address only if Delivery is selected
-    if (deliveryType === 'delivery' && !address) {
-        showToast("Укажите адрес доставки", 'error');
-        return;
-    }
+    // Validate Address REMOVED by user request
+
 
     if (!name || !phone || !isAgeConfirmed) {
         showToast("Заполните обязательные поля и подтвердите возраст", 'error');
@@ -323,7 +429,7 @@ export async function submitOrderForm() {
 
             if (modal && listContainer) {
                 // Format the list of items nicely
-                const errorListHtml = outOfStockItems.map(i => `< div style = "margin-bottom: 5px;" >• ${i}</div > `).join('');
+                const errorListHtml = outOfStockItems.map(i => `<div style="margin-bottom: 5px;">• ${i}</div>`).join('');
                 listContainer.innerHTML = errorListHtml;
                 modal.style.display = 'flex'; // Uses flex centering from CSS
             } else {
@@ -431,7 +537,7 @@ export async function submitOrderForm() {
         customer: {
             name,
             phone,
-            address: deliveryType === 'delivery' ? address : 'Самовывоз',
+            address: '', // Removed by user request
             delivery_type: deliveryType,
             comment,
             payment,
@@ -446,10 +552,17 @@ export async function submitOrderForm() {
     };
 
     if (discountApplied > 0) {
-        orderPayload.new_user_discount = discountApplied; // This field name is misleading if it's not new user discount
-        // Add active promo code if selected
-        if (discountSelect && discountSelect.value !== 'new_client_10') {
-            orderPayload.promo_code = discountSelect.value; // e.g., 'traveler_10' or 'winter_15'
+        // CORRECT LOGIC: Only set new_user_discount if THAT SPECIFIC discount was used
+        if (discountSelect && discountSelect.value === 'new_client_10') {
+            orderPayload.new_user_discount = discountApplied;
+        } else {
+            // It's a promo code discount
+            orderPayload.promo_discount = discountApplied; // Use a different field
+            orderPayload.new_user_discount = 0; // Explicitly 0
+
+            if (discountSelect) {
+                orderPayload.promo_code = discountSelect.value;
+            }
         }
     }
 
@@ -472,7 +585,7 @@ export async function submitOrderForm() {
             }
             */
 
-            localStorage.removeItem('cart');
+            clearCart();
             sessionStorage.removeItem('preload_catalog');
 
             // Clear cached eligibility because they are no longer a new user!
@@ -490,6 +603,13 @@ export async function submitOrderForm() {
             // Deduct bonuses handled by server
             if (bonusesUsed > 0) {
                 console.log(`Server requested to deduct ${bonusesUsed} bonuses`);
+            }
+
+            // AUTO-SAVE USER DATA FOR FUTURE
+            localStorage.setItem('juicy_user_name', name);
+            localStorage.setItem('juicy_user_phone', phone);
+            if (address) {
+                localStorage.setItem('juicy_user_address', address);
             }
 
             // document.getElementById('checkout-form').style.display = 'none';
@@ -514,64 +634,9 @@ export async function submitOrderForm() {
 }
 
 // Initialize based on page
-document.addEventListener('DOMContentLoaded', () => {
-    if (window.location.pathname.includes('cart.html')) {
-        renderCart();
-    }
 
-    if (window.location.pathname.includes('checkout.html')) {
-        initCheckoutPage();
-    }
+// --- Helper Functions (Moved to top level for scope visibility) ---
 
-    if (window.location.pathname.includes('cart.html') || window.location.pathname.includes('checkout.html')) {
-        // Phone Auto-Format Logic
-        const phoneInput = document.getElementById('phone');
-        if (phoneInput) {
-            // Ensure it starts with +7 on focus if empty/wrong
-            phoneInput.addEventListener('focus', function () {
-                if (!this.value.startsWith('+7 ')) {
-                    this.value = '+7 ';
-                }
-            });
-
-            phoneInput.addEventListener('input', function (e) {
-                let val = e.target.value;
-                // Enforce +7 prefix
-                if (!val.startsWith('+7 ')) {
-                    // If user deleted the space or part of +7, restore it
-                    // We try to keep what they typed after it
-                    const raw = val.replace(/^\+7\s?|^\+7|^\+/, '');
-                    e.target.value = '+7 ' + raw;
-                }
-            });
-        }
-    }
-
-    // Delivery Method Toggle Logic
-    const radios = document.querySelectorAll('input[name="delivery_type"]');
-    const addressBlock = document.getElementById('address-block');
-
-    if (radios.length > 0 && addressBlock) {
-        radios.forEach(radio => {
-            radio.addEventListener('change', (e) => {
-                if (e.target.value === 'delivery') {
-                    addressBlock.style.display = 'block';
-                } else {
-                    addressBlock.style.display = 'none';
-                }
-            });
-        });
-    }
-
-    if (window.location.pathname.includes('product_details.html')) {
-        initProductDetails(); // Define this locally or import
-    }
-});
-
-
-/**
- * Checks if any discounts are available on load and disables "Yes" radio if none.
- */
 async function initializeDiscountAvailability() {
     const userId = getUserId();
     if (!userId) return;
@@ -592,6 +657,8 @@ async function initializeDiscountAvailability() {
 
     // If we add more discounts later, add checking logic here
     const hasAnyDiscount = isNewUser || (loadedPromoInfo !== null);
+
+    console.log(`[DISCOUNT INIT] isNewUser: ${isNewUser}, Promo: ${!!loadedPromoInfo}, HasAny: ${hasAnyDiscount}`);
 
     const yesRadio = document.querySelector('input[name="use_discount"][value="yes"]');
     const noRadio = document.querySelector('input[name="use_discount"][value="no"]');
@@ -626,87 +693,8 @@ async function initializeDiscountAvailability() {
     }
 }
 
-function initCheckoutPage() {
-    const totalEl = document.getElementById('checkout-sum');
-    if (!totalEl) return;
 
-    const cart = getCart();
-    if (cart.length === 0) {
-        window.location.href = 'index.html'; // Redirect if empty
-        return;
-    }
 
-    const originalCartTotal = Math.round(cart.reduce((sum, item) => sum + (item.price * item.quantity), 0));
-
-    // Always show original total (discount applied internally only)
-    totalEl.textContent = `${originalCartTotal} ₽`;
-
-    // Load available bonuses and discounts immediately when page loads
-    const userId = getUserId();
-    if (userId) {
-        loadAvailableBonuses();
-        loadAvailableDiscounts();
-        initializeDiscountAvailability(); // Block "Yes" if no discount
-    }
-}
-
-// Logic for Product Details Page
-async function initProductDetails() {
-    // ... existing code ...
-    const params = new URLSearchParams(window.location.search);
-    const productId = params.get('id');
-    if (!productId) return;
-
-    const container = document.getElementById('product-details-container');
-    container.innerHTML = '<p style="text-align:center;">Загрузка...</p>';
-
-    const product = await fetchProductById(productId);
-
-    if (product) {
-        const p = {
-            ...product,
-            price: Number(product.price),
-            stock: Number(product.stock),
-            product_id: Number(product.product_id)
-        };
-
-        container.innerHTML = `
-            <img src="${p.image_url || 'img/vape_icon.png'}" class="product-detail-image" style="display:block; margin: 0 auto;">
-        <div class="detail-panel">
-            <h2>${p.brand} - ${p.model_name}</h2>
-            <div class="detail-row">
-                <span class="label">Цена:</span>
-                <span class="value price">${p.price}</span>
-            </div>
-            <div class="detail-row">
-                <span class="label">Вкус:</span>
-                <span class="value">${p.taste || '-'}</span>
-            </div>
-            <div class="detail-row">
-                <span class="label">Количество затяжек:</span>
-                <span class="value">${p.puffs}</span>
-            </div>
-            <div class="detail-row">
-                <span class="label">В наличии:</span>
-                <span class="value stock">${p.stock} шт.</span>
-            </div>
-
-            <div style="margin-top: 15px; font-size: 0.9em; color: gray; text-align: left;">
-                <p>ℹ️ 100% Оригинальная продукция</p>
-            </div>
-        </div>
-`;
-
-        const addBtn = document.getElementById('add-to-cart-btn');
-        addBtn.onclick = () => addToCart(p);
-    } else {
-        container.innerHTML = '<p>Товар не найден.</p>';
-    }
-}
-
-/**
- * Toggle Bonus Input Section
- */
 function toggleBonusInput() {
     const useBonuses = document.querySelector('input[name="use_bonuses"]:checked')?.value;
     const bonusBlock = document.getElementById('bonus-input-block');
@@ -722,9 +710,6 @@ function toggleBonusInput() {
     }
 }
 
-/**
- * Toggle Discount Input Section
- */
 function toggleDiscountInput() {
     const useDiscount = document.querySelector('input[name="use_discount"]:checked')?.value;
     const discountBlock = document.getElementById('discount-input-block');
@@ -766,6 +751,15 @@ async function loadAvailableDiscounts() {
         opt.value = 'new_client_10';
         opt.textContent = '🔥 Скидка Нового Клиента (-10%)';
         select.appendChild(opt);
+    } else {
+        // Show as disabled if used
+        const opt = document.createElement('option');
+        opt.value = 'new_client_10_used';
+        opt.disabled = true;
+        opt.textContent = '❌ Скидка Нового Клиента (Использована)';
+        // Optional: style it if browser allows (some mobile browsers ignore option styles)
+        opt.style.color = '#ff4444';
+        select.appendChild(opt);
     }
     // 2. Dynamic Promo (from DB)
     if (loadedPromoInfo) {
@@ -790,51 +784,52 @@ async function loadAvailableDiscounts() {
     }
 }
 
-/**
- * Load and display available bonuses
- */
 async function loadAvailableBonuses() {
-    // getUserId already imported
     const userId = getUserId();
     const availableEl = document.getElementById('available-bonuses');
     const bonusInput = document.getElementById('bonus-amount');
 
     const { getUserBonuses, syncBonuses } = await import('./services/bonus-system.js');
-    await syncBonuses(userId);
-    const availableBonuses = getUserBonuses(userId);
 
-    if (availableEl) availableEl.textContent = availableBonuses;
-    if (bonusInput) bonusInput.max = availableBonuses;
+    // Helper to update UI state
+    const updateUI = (val) => {
+        if (availableEl) availableEl.textContent = val;
+        if (bonusInput) bonusInput.max = val;
 
-    // Disable "Yes" option if 0 bonuses
-    const yesRadio = document.querySelector('input[name="use_bonuses"][value="yes"]');
-    const noRadio = document.querySelector('input[name="use_bonuses"][value="no"]');
+        const yesRadio = document.querySelector('input[name="use_bonuses"][value="yes"]');
+        const noRadio = document.querySelector('input[name="use_bonuses"][value="no"]');
 
-    if (yesRadio && availableBonuses === 0) {
-        yesRadio.disabled = true;
-        // Also style the parent label to look disabled if needed
-        yesRadio.parentElement.style.opacity = "0.5";
-        yesRadio.parentElement.style.cursor = "not-allowed";
+        if (yesRadio && val === 0) {
+            yesRadio.disabled = true;
+            yesRadio.parentElement.style.opacity = "0.5";
+            yesRadio.parentElement.style.cursor = "not-allowed";
 
-        // If it was checked, uncheck it and check 'no'
-        if (yesRadio.checked) {
-            yesRadio.checked = false;
-            if (noRadio) {
-                noRadio.checked = true;
-                // Trigger change event to hide the input
-                toggleBonusInput();
+            if (yesRadio.checked) {
+                yesRadio.checked = false;
+                if (noRadio) {
+                    noRadio.checked = true;
+                    toggleBonusInput();
+                }
             }
+        } else if (yesRadio) {
+            yesRadio.disabled = false;
+            yesRadio.parentElement.style.opacity = "1";
+            yesRadio.parentElement.style.cursor = "pointer";
         }
-    } else if (yesRadio) {
-        yesRadio.disabled = false;
-        yesRadio.parentElement.style.opacity = "1";
-        yesRadio.parentElement.style.cursor = "pointer";
-    }
+    };
+
+    // 1. Show Cache Immediately (Optimistic)
+    const cached = getUserBonuses(userId);
+    updateUI(cached);
+
+    // 2. Sync in Background
+    syncBonuses(userId).then(fresh => {
+        if (fresh !== cached) {
+            updateUI(fresh);
+        }
+    });
 }
 
-/**
- * MAIN TOTAL CALCULATOR (Handles Discounts + Bonuses)
- */
 function updateOverallTotal() {
     const cart = getCart();
     const originalTotal = Math.round(cart.reduce((sum, item) => sum + (item.price * item.quantity), 0));
@@ -926,3 +921,92 @@ function updateOverallTotal() {
         }
     }
 }
+
+// --- Initialization Logic ---
+
+function initCartModule() {
+    console.log("Initializing Cart Module...");
+
+    // Telegram Web App Styling
+    const tg = window.Telegram?.WebApp;
+    if (tg) {
+        tg.expand();
+        try {
+            tg.setHeaderColor('#050510');
+            tg.setBackgroundColor('#050510');
+            if (tg.requestFullscreen) {
+                tg.requestFullscreen();
+            }
+        } catch (e) {
+            console.log("TG Styling Error:", e);
+        }
+    }
+
+    const path = window.location.pathname;
+    const cartContainer = document.getElementById('cart-items');
+    const checkoutForm = document.getElementById('checkout-form') || document.getElementById('name');
+
+    if (path.includes('cart.html') || cartContainer) {
+        console.log("Detected Cart Page (by path or element). Rendering...");
+        renderCart();
+    }
+
+    if (path.includes('checkout.html') || checkoutForm) {
+        console.log("Detected Checkout Page (by path or element). Initializing...");
+        initCheckoutPage();
+    }
+
+    if (path.includes('cart.html') || path.includes('checkout.html')) {
+        // Phone Auto-Format Logic
+        const phoneInput = document.getElementById('phone');
+        if (phoneInput) {
+            phoneInput.addEventListener('focus', function () {
+                if (!this.value.startsWith('+7 ')) {
+                    this.value = '+7 ';
+                }
+            });
+
+            phoneInput.addEventListener('input', function (e) {
+                let val = e.target.value;
+                if (!val.startsWith('+7 ')) {
+                    const raw = val.replace(/^\+7\s?|^\+7|^\+/, '');
+                    e.target.value = '+7 ' + raw;
+                }
+            });
+        }
+    }
+
+    // Delivery Method Toggle Logic
+    const radios = document.querySelectorAll('input[name="delivery_type"]');
+    const addressBlock = document.getElementById('address-block');
+
+    if (radios.length > 0 && addressBlock) {
+        radios.forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                if (e.target.value === 'delivery') {
+                    addressBlock.style.display = 'block';
+                } else {
+                    addressBlock.style.display = 'none';
+                }
+            });
+        });
+    }
+}
+
+// Run immediately if DOM is ready (which is true for modules usually), otherwise wait
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initCartModule);
+} else {
+    initCartModule();
+}
+// Expose functions to window (moved to end to ensure definition)
+window.changeQuantity = changeQuantity;
+window.submitOrderForm = submitOrderForm;
+window.addToCart = addToCart;
+window.toggleBonusInput = toggleBonusInput;
+window.toggleDiscountInput = toggleDiscountInput;
+window.updateBonusPayment = updateOverallTotal;
+window.updateOverallTotal = updateOverallTotal;
+window.renderCart = renderCart;
+window.showComingSoon = showComingSoon;
+window.closeComingSoon = closeComingSoon;
