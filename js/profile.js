@@ -134,14 +134,20 @@ function initUserProfile() {
     nameDisplay.textContent = userName;
 
     // DEBUG: Show User ID
-    let idDisplay = document.getElementById('profile-user-id-debug');
-    if (!idDisplay) {
-        idDisplay = document.createElement('div');
-        idDisplay.id = 'profile-user-id-debug';
-        idDisplay.style.cssText = 'color: #555; font-size: 0.7em; margin-top: 5px; cursor: pointer; text-align: center;';
-        idDisplay.title = 'Нажмите чтобы скопировать и обновить';
-        idDisplay.onclick = async () => {
-            const uid = getUserId();
+    const uid = getUserId();
+    const isWeb = String(uid).startsWith('web_');
+    const displayId = document.getElementById('user-id-display');
+
+    if (displayId) {
+        displayId.textContent = `ID: ${uid} ${isWeb ? '(⚠️ WEB/GUEST)' : '(Telegram)'}`;
+        displayId.style.cursor = 'pointer';
+        displayId.title = 'Нажмите чтобы скопировать';
+
+        if (isWeb) {
+            displayId.style.color = '#ff4444'; // Red warning for Web users
+        }
+
+        displayId.onclick = async () => {
             try {
                 await navigator.clipboard.writeText(uid);
                 showToast('ID скопирован');
@@ -157,9 +163,7 @@ function initUserProfile() {
             }
             if (window.refreshBonuses) window.refreshBonuses();
         };
-        nameDisplay.parentElement.appendChild(idDisplay);
     }
-    idDisplay.textContent = `ID: ${getUserId()}`;
 
     // Expose edit functions
     window.editName = () => {

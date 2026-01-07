@@ -20,6 +20,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Globally accessible for the button onclick
     window.currentUserId = userId;
 
+    const debugEl = document.getElementById('debug-id-referral');
+    if (debugEl) {
+        const isWeb = String(userId).startsWith('web_');
+        debugEl.textContent = `Ваш ID: ${userId} ${isWeb ? '(GUEST)' : ''}`;
+        if (isWeb) debugEl.style.color = 'red';
+    }
+
     initReferralSection(userId);
 
     // FETCH STATS (BUT NOT HISTORY YET)

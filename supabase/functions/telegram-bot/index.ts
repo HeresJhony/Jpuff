@@ -185,6 +185,40 @@ async function handleGet(req: Request, url: URL) {
         return new Response(JSON.stringify(data || []), { headers: { "Content-Type": "application/json", ...corsHeaders } });
     }
 
+    if (action === "getReferralStats" && userId) {
+        // 1. Clicks
+        const { data: client } = await supabase.from("clients").select("referral_clicks").eq("user_id", userId).single();
+        const clicks = client?.referral_clicks || 0;
+
+        // 2. Total Referrals
+        const { count: total, data: refs } = await supabase.from("clients").select("user_id", { count: 'exact' }).eq("referrer_id", userId);
+
+        // 3. Active Referrals (Last 30 days)
+        let active = 0;
+        const refIds = refs?.map(r => r.user_id) || [];
+
+        if (refIds.length > 0) {
+            const thirtyDaysAgo = new Date();
+            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+            const { data: orders } = await supabase.from("orders")
+                .select("user_id")
+                .in("user_id", refIds)
+                .gt("created_at", thirtyDaysAgo.toISOString());
+
+            if (orders) {
+                const uniqueActive = new Set(orders.map((o: any) => o.user_id));
+                active = uniqueActive.size;
+            }
+        }
+
+        return new Response(JSON.stringify({
+            total: total || 0,
+            active: active,
+            clicks: clicks
+        }), { headers: { "Content-Type": "application/json", ...corsHeaders } });
+    }
+
     // ... Другие GET методы можно добавить по необходимости, но для MVP достаточно
 
     // Discount Check
@@ -215,15 +249,26 @@ async function handleGet(req: Request, url: URL) {
 async function registerVisitWrapper(body: any) {
     const { userId } = body;
     if (!userId) return new Response(JSON.stringify({ error: "Missing userId" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    // Логика регистрации
-    // ... (Упрощенная версия)
-    const { data: existing } = await supabase.from("clients").select("id").eq("user_id", userId).single();
+
+    // 1. Check if user exists
+    const { data: existing } = await supabase.from("clients").select("id").eq("user_id", userId).maybeSingle();
     let isNew = false;
+
     if (!existing) {
-        await supabase.from("clients").insert({ user_id: userId, name: "Гость", bonus_balance: 0, total_orders: 0 });
-        isNew = true;
-        // Welcome MSG
-        if (!String(userId).startsWith('web_')) sendTelegram(String(userId), "Добро пожаловать!").catch(() => { });
+        // 2. Try to insert
+        const { error: insertError } = await supabase.from("clients").insert({ user_id: userId, name: "Гость", bonus_balance: 0, total_orders: 0 });
+
+        // 3. Only if insert SUCCEEDED, we consider them new and send the message
+        // (If insert failed, e.g. due to race condition or unique violation, they are not new)
+        if (!insertError) {
+            isNew = true;
+            // Welcome MSG
+            if (!String(userId).startsWith('web_')) {
+                sendTelegram(String(userId), "Добро пожаловать!").catch((e) => console.error("Welcome msg failed", e));
+            }
+        } else {
+            console.warn("Register visit insert failed (likely duplicate):", insertError);
+        }
     }
     return new Response(JSON.stringify({ success: true, isNew }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 }
@@ -236,58 +281,134 @@ async function registerReferralLink(body: any) {
     if (userId === referrerId) return new Response(JSON.stringify({ success: false }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     const { data: existing } = await supabase.from("clients").select("*").eq("user_id", userId).single();
+
+    let shouldIncrement = false;
+
     if (!existing) {
-        // Создаем с реферером
-        await supabase.from("clients").insert({ user_id: userId, name: "Гость", bonus_balance: 0, referrer_id: referrerId, total_orders: 0 });
+        // CASE 1: New User
+        const { error: insertError } = await supabase.from("clients").insert({ user_id: userId, name: "Гость", bonus_balance: 0, referrer_id: referrerId, total_orders: 0 });
+
+        if (insertError) {
+            // RACE CONDITION DETECTED:
+            // "registerVisit" likely created the user milliseconds ago.
+            // Fallback: Treat as existing user and try to update referrer
+            console.warn("Referral race condition caught:", insertError.message);
+
+            // Re-fetch to be sure
+            const { data: raceUser } = await supabase.from("clients").select("referrer_id").eq("user_id", userId).single();
+            if (raceUser && !raceUser.referrer_id) {
+                await supabase.from("clients").update({ referrer_id: referrerId }).eq("user_id", userId);
+                shouldIncrement = true;
+            }
+        } else {
+            shouldIncrement = true;
+        }
+    } else {
+        // CASE 2: Existing User, but no referrer yet (and no orders yet, to be fair)
+        // Relaxed rule: If referrer_id is NULL, we set it.
+        if (!existing.referrer_id) {
+            await supabase.from("clients").update({ referrer_id: referrerId }).eq("user_id", userId);
+            shouldIncrement = true;
+        }
+    }
+
+    if (shouldIncrement) {
         // Инкремент кликов рефереру
         const { data: r } = await supabase.from("clients").select("referral_clicks").eq("user_id", referrerId).single();
         if (r) await supabase.from("clients").update({ referral_clicks: (r.referral_clicks || 0) + 1 }).eq("user_id", referrerId);
-        else {
-            // Создаем реферера-призрака
-            await supabase.from("clients").insert({ user_id: referrerId, name: "Пригласивший", referral_clicks: 1 });
-        }
+        else await supabase.from("clients").insert({ user_id: referrerId, name: "Пригласивший", referral_clicks: 1 });
     }
     return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 }
 
 
 async function handleNewOrder(order: any) {
-    // ВАЖНО: Валидация
-    if (!order.items || order.items.length === 0) return new Response(JSON.stringify({ error: "No items" }), { headers: corsHeaders });
-
-    // 1. Проверка цен и стока (Можно вынести в RPC тоже, но пока оставим тут для точности)
-    // Для скорости сразу пишем в БД, а проверки делаем минимальные
-    // Но лучше делать как было:
-    let realTotal = 0;
-    const finalItems = [];
-
-    for (const item of order.items) {
-        const { data: p } = await supabase.from("Products").select("price, stock").eq("id", item.id).single();
-        if (!p) continue; // Skip invalid
-        const price = Number(p.price);
-        realTotal += price * item.quantity;
-        finalItems.push({ ...item, price });
-
-        // Списание стока
-        const newStock = Math.max(0, Number(p.stock) - Number(item.quantity));
-        await supabase.from("Products").update({ stock: newStock }).eq("id", item.id);
-    }
-
-    // Скидки
-    let finalTotal = realTotal - (order.new_user_discount || 0) - (order.promo_discount || 0) - (order.bonuses_used || 0);
-    // ... Проверки опустим для краткости, полагаемся на фронтенд + базу
-
-    // 2. ГАРАНТИЯ СУЩЕСТВОВАНИЯ КЛИЕНТА
     const userId = order.customer.user_id;
-    // upsert с ignoreDuplicates гарантирует, что клиент будет создан, если его нет
+
+    // 1. GUARANTEE CLIENT EXISTS (Upsert first)
     await supabase.from("clients").upsert(
         { user_id: userId, name: order.customer.name || "Гость", total_orders: 0, bonus_balance: 0 },
         { onConflict: 'user_id', ignoreDuplicates: true }
     );
 
-    // Сохраняем заказ
+    // 2. CHECK PRICES & STOCK (Server-Side Calculation)
+    if (!order.items || order.items.length === 0) return new Response(JSON.stringify({ error: "No items" }), { headers: corsHeaders });
+
+    let realTotal = 0;
+    const finalItems = [];
+
+    for (const item of order.items) {
+        // Fetch LIVE price and stock
+        const { data: p } = await supabase.from("Products").select("price, stock").eq("id", item.id).single();
+        if (!p) continue;
+
+        const price = Number(p.price);
+        realTotal += price * item.quantity;
+
+        // Use TRUSTED price
+        finalItems.push({ ...item, price });
+
+        // Update Stock
+        const newStock = Math.max(0, Number(p.stock) - Number(item.quantity));
+        await supabase.from("Products").update({ stock: newStock }).eq("id", item.id);
+    }
+
+    // 3. CALCULATE DISCOUNTS (Server-Side Logic)
+    let runningTotal = realTotal;
+    let newUserDiscount = 0;
+    let promoDiscount = 0;
+    let appliedPromoCode = null;
+
+    // A. New User Discount
+    // Check intent from frontend (flag or promo)
+    const requestedNewUser = (order.new_user_discount > 0) || (order.promo_code === 'new_client_10');
+
+    if (requestedNewUser) {
+        // Strict Eligibility Check: Count COMPLETED orders (excluding cancelled)
+        // If count is 0, they are eligible.
+        const { count } = await supabase.from("orders")
+            .select("id", { count: 'exact', head: true })
+            .eq("user_id", userId)
+            .eq("status", "completed");
+
+        if (!count || count === 0) {
+            newUserDiscount = Math.round(realTotal * 0.10);
+            runningTotal -= newUserDiscount;
+        }
+    }
+
+    // B. Promo Code (If not new user discount)
+    if (newUserDiscount === 0 && order.promo_code && order.promo_code !== 'new_client_10') {
+        const { data: promo } = await supabase.from("discounts").select("*").eq("code", order.promo_code).single();
+        if (promo && promo.is_active) {
+            if (promo.type === 'percent') {
+                promoDiscount = Math.round(realTotal * (Number(promo.value) / 100));
+            } else {
+                promoDiscount = Number(promo.value);
+            }
+            runningTotal -= promoDiscount;
+            appliedPromoCode = promo.code;
+        }
+    }
+
+    // C. Bonuses (Strict Deduction)
+    let bonusesUsed = 0;
+    if (order.bonuses_used > 0) {
+        const { data: client } = await supabase.from("clients").select("bonus_balance").eq("user_id", userId).single();
+        const available = client?.bonus_balance || 0;
+
+        // Cannot use more than available, cannot use more than total price
+        // (Assuming 100% payment with bonuses is allowed, otherwise add limit here)
+        bonusesUsed = Math.min(Number(order.bonuses_used), Number(available), Math.max(0, runningTotal));
+
+        runningTotal -= bonusesUsed;
+    }
+
+    const finalTotal = Math.max(0, runningTotal);
+
+    // 4. SAVE ORDER (Trusted Data)
     const { data: newOrder, error } = await supabase.from("orders").insert({
-        user_id: order.customer.user_id,
+        user_id: userId,
         customer_name: order.customer.name,
         customer_phone: order.customer.phone,
         customer_address: order.customer.address,
@@ -295,28 +416,46 @@ async function handleNewOrder(order: any) {
         customer_comment: order.customer.comment,
         items: finalItems,
         total: finalTotal,
-        bonuses_used: order.bonuses_used || 0,
-        status: "Новый",
-        new_user_discount: order.new_user_discount,
-        promo_discount: order.promo_discount,
-        promo_code: order.promo_code
+        // Save breakdowns too
+        bonuses_used: bonusesUsed,
+        new_user_discount: newUserDiscount,
+        promo_discount: promoDiscount,
+        promo_code: appliedPromoCode || (newUserDiscount > 0 ? 'new_client_10' : null),
+
+        status: "Новый"
     }).select("id").single();
 
     if (error) throw error;
     const orderId = newOrder.id;
 
-    // Списываем бонусы с баланса
-    if (order.bonuses_used > 0) {
-        const { data: c } = await supabase.from("clients").select("bonus_balance").eq("user_id", order.customer.user_id).single();
-        if (c) {
-            const nb = Math.max(0, (c.bonus_balance || 0) - order.bonuses_used);
-            await supabase.from("clients").update({ bonus_balance: nb }).eq("user_id", order.customer.user_id);
-            await supabase.from("bonus_transactions").insert({ user_id: order.customer.user_id, amount: -order.bonuses_used, description: `Оплата заказа #${orderId}` });
+    // 5. DEDUCT BONUSES
+    if (bonusesUsed > 0) {
+        try {
+            const { error: rpcError } = await supabase.rpc('deduct_bonuses', { user_id_param: userId, amount_param: bonusesUsed, desc_param: `Оплата заказа #${orderId}` });
+            if (rpcError) throw rpcError;
+        } catch (e) {
+            console.error("RPC Failed, using fallback:", e);
+            // Fallback manually:
+            const { data: c } = await supabase.from("clients").select("bonus_balance").eq("user_id", userId).single();
+            const current = c?.bonus_balance || 0;
+            const newBal = Math.max(0, current - bonusesUsed);
+
+            await supabase.from("clients").update({ bonus_balance: newBal }).eq("user_id", userId);
+            await supabase.from("bonus_transactions").insert({ user_id: userId, amount: -bonusesUsed, description: `Оплата заказа #${orderId}` });
         }
     }
 
-    // Отправляем админу
-    const adminMsg = formatAdminMsg(order, orderId, finalTotal);
+    // 6. NOTIFY ADMIN
+    // Construct trusted order object for notification
+    const trustedOrder = {
+        ...order,
+        items: finalItems,
+        new_user_discount: newUserDiscount,
+        promo_discount: promoDiscount,
+        bonuses_used: bonusesUsed
+    };
+
+    const adminMsg = formatAdminMsg(trustedOrder, orderId, finalTotal);
     const inline_keyboard = [
         [
             { text: "✅ Выдано", callback_data: `confirm_${orderId}` },
@@ -326,6 +465,14 @@ async function handleNewOrder(order: any) {
     if (order.customer.username) inline_keyboard.unshift([{ text: "💬 Связаться", url: `https://t.me/${order.customer.username}` }]);
 
     await sendTelegram(ADMIN_CHAT_ID, adminMsg, { inline_keyboard });
+
+    // Client Notify
+    if (!String(userId).startsWith('web_')) {
+        sendTelegram(userId, `✅ Ваш заказ #${orderId} принят! Сумма к оплате: ${finalTotal} ₽`).catch(() => { });
+    }
+
+    return new Response(JSON.stringify({ status: "success", orderId, finalTotal }), { headers: { "Content-Type": "application/json", ...corsHeaders } });
+
 
     // Клиенту
     if (!String(order.customer.user_id).startsWith('web_')) {
@@ -353,8 +500,15 @@ async function sendTelegram(chatId: string, text: string, markup: any = null) {
 }
 async function handleMessage(msg: any) {
     if (msg.text === '/start') {
-        const txt = "Добро пожаловать! Перейдите в магазин по кнопке ниже.";
-        await sendTelegram(msg.chat.id, txt);
+        const txt = "Добро пожаловать! 💨\n\nНажмите на кнопку ниже, чтобы открыть магазин 👇";
+        const markup = {
+            inline_keyboard: [
+                [
+                    { text: "🛍️ Открыть магазин", url: "https://t.me/Jpuffbot/juicy" }
+                ]
+            ]
+        };
+        await sendTelegram(msg.chat.id, txt, markup);
     }
 }
 function formatAdminMsg(order: any, id: string, total: number) {
