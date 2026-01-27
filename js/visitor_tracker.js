@@ -46,4 +46,25 @@ import { getUserId } from './services/user-id.js';
                 .catch(e => console.error("❌ Visit Tracking Error:", e));
         }
     }
+    // 3. AUTO-HEAL: Check for delayed Telegram ID injection
+    // If we are currently "Guest" (web_), but TG data appears later, we RELOAD to fix it.
+    const currentId = getUserId();
+    if (String(currentId).startsWith('web_')) {
+        let attempts = 0;
+        const interval = setInterval(() => {
+            attempts++;
+            const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
+
+            if (tgUser && tgUser.id) {
+                console.log("✨ Telegram ID detected late! Reloading to sync...");
+                // Remove the fake guest ID so next load picks up the real one
+                localStorage.removeItem('juicy_device_id');
+                clearInterval(interval);
+                window.location.reload();
+            }
+
+            if (attempts > 50) clearInterval(interval); // Check for 5 seconds
+        }, 100);
+    }
+
 })();
