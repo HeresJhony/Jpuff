@@ -366,11 +366,11 @@ function showToast(message) {
         toast = document.createElement('div');
         toast.id = 'toast-notification';
         toast.style.cssText = `
-    position: fixed; bottom: 80px; left: 50 %; transform: translateX(-50 %);
+    position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
     background: rgba(0, 0, 0, 0.9); color: white; padding: 12px 24px;
-    border - radius: 20px; z - index: 1000; font - size: 0.95em;
-    opacity: 0; transition: opacity 0.3s; pointer - events: none;
-    box - shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    border-radius: 20px; z-index: 1000; font-size: 0.95em;
+    opacity: 0; transition: opacity 0.3s; pointer-events: none;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
     `;
         document.body.appendChild(toast);
     }
